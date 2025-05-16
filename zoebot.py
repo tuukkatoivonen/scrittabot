@@ -88,6 +88,13 @@ USER1 = """
 <tuukka>Nice motto! Do you have ideas what I should do today?</tuukka>
 """
 
+USER2 = """
+### Current Time: 2025-05-15 14:15:03
+<tuukka>Good idea, I'll do so right away!</tuukka>
+### Current Time: 2025-05-15 17:45:22
+<john>Hi, who are you? Can you tell something about yourself?</john>
+"""
+
 def zoebot():
     urllib3.disable_warnings()
     headers = { 'Authorization': 'Bearer ' + API_KEY }
@@ -108,10 +115,18 @@ def zoebot():
     }
 
     response = requests.post(OPENAI_URL, json=payload, headers=headers, verify=False)
-
     if response.status_code != 200:
-        print(f'Error: Request failed with status {response.status_code}, response: {response.text}')
+        print(f'Error1: Request failed with status {response.status_code}, response: {response.text}')
         return
+    json = response.json()
+
+    payload['messages'].append({ 'role': 'assistant', 'content': json['choices'][0]['message']['content'] })
+    payload['messages'].append({ 'role': 'user', 'content': USER2 })
+    response = requests.post(OPENAI_URL, json=payload, headers=headers, verify=False)
+    if response.status_code != 200:
+        print(f'Error2: Request failed with status {response.status_code}, response: {response.text}')
+        return
+    json = response.json()
 
     pp = pprint.PrettyPrinter(indent=4)
     pp.pprint(response.json())
