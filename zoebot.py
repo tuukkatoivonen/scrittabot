@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 
-import json
-import os
-import requests
-import sys
 import urllib3
-import pprint 
+
+import streamingllm
 
 OPENAI_URL = 'https://zeonzone.zonet:4001/v1/chat/completions'
 MODEL_NAME = 'zeonzone'
@@ -97,38 +94,26 @@ USER2 = """
 
 def zoebot():
     urllib3.disable_warnings()
-    headers = { 'Authorization': 'Bearer ' + API_KEY }
-    payload = {
+    options = {
         "model": MODEL_NAME,
-        'max_tokens': 1024,
+        'max_tokens': 4096,
         'temperature': 0.0,
         'top_p': 1.0,
         'n': 1,
-        'stream': False,
         'cache_prompt': True,
-        "messages": [
-            { 'role': 'system',    'content': PROMPT },
-            { 'role': 'user',      'content': SYSTEM1 },
-            { 'role': 'assistant', 'content': ASSISTANT1 },
-            { 'role': 'user',      'content': USER1 },
-        ]
     }
+    llm = streamingllm.LineStreamingLLM(streamingllm.StreamingLLM(OPENAI_URL, API_KEY, options, insecure=True))
 
-    response = requests.post(OPENAI_URL, json=payload, headers=headers, verify=False)
-    if response.status_code != 200:
-        print(f'Error1: Request failed with status {response.status_code}, response: {response.text}')
-        return
-    json = response.json()
+    messages = [
+        { 'role': 'system', 'content': 'You are helpful assistant.' },
+        { 'role': 'user', 'content': 'Could you describe how cars are built?' }
+    ]
+    llm.request_data(messages)
 
-    payload['messages'].append({ 'role': 'assistant', 'content': json['choices'][0]['message']['content'] })
-    payload['messages'].append({ 'role': 'user', 'content': USER2 })
-    response = requests.post(OPENAI_URL, json=payload, headers=headers, verify=False)
-    if response.status_code != 200:
-        print(f'Error2: Request failed with status {response.status_code}, response: {response.text}')
-        return
-    json = response.json()
-
-    pp = pprint.PrettyPrinter(indent=4)
-    pp.pprint(response.json())
+    while True:
+        line = llm.get_next_line()
+        if line is None:
+            break
+        print(line)
 
 zoebot()
