@@ -1,12 +1,93 @@
 #!/usr/bin/env python3
 
 import urllib3
+import requests
+
+from smolagents.local_python_executor import (
+    BASE_PYTHON_TOOLS,
+    evaluate_python_code,
+)
 
 import streamingllm
 
-OPENAI_URL = 'https://zeonzone.zonet:4001/v1/chat/completions'
+OPENAI_URL = 'https://zeonzone.zonet:4001'
 MODEL_NAME = 'zeonzone'
 API_KEY = 'sk-pZY6hfPYOhLXRqxNJ0scCw'
+
+
+class TokenCounting:
+    def __init__(self, url, api_key=None, options={}, insecure=False):
+        self.base_url = url
+        self.api_key = api_key
+        self.options = options
+        self.insecure = insecure # Corresponds to curl -k
+
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        })
+
+    def count(self, string):
+        payload = self.options
+        payload['prompt'] = string
+        response = self.session.post(
+            self.base_url + '/utils/token_counter',
+            json = payload,
+            verify = not self.insecure
+        )
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        return response.json()['total_tokens']
+
+class Embedding:
+    def __init__(self, url, api_key=None, options={}, insecure=False):
+        self.base_url = url + '/v1/embeddings'
+        self.api_key = api_key
+        self.options = options
+        self.insecure = insecure # Corresponds to curl -k
+
+        self.session = requests.Session()
+        self.session.headers.update({
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        })
+
+    def embedding(self, string):
+        payload = self.options
+        payload['input'] = string
+        response = self.session.post(
+            self.base_url,
+            json = payload,
+            verify = not self.insecure
+        )
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        return response.json()['data'][0]['embedding']
+
+class PythonExecution:
+    def __init__(self, tools):
+        self._state = {}
+        self._tools = BASE_PYTHON_TOOLS
+        self._tools.update(tools)
+
+    def execute(code):
+        exc = None
+        try:
+            result, _ = evaluate_python_code(code, self._tools, state=self._state)
+        except Exception as e:
+            exc = e
+        return str(exc) if exc is not None else None
+
+class Context:
+    def __init__(self, parts):
+        self._parts = parts
+
+    def get(self):
+        context = ""
+        for c in self._parts:
+            context += c.get()
+
+
+
 
 PROMPT = """
 You are Zoe, the latest version of Limnal Corporation's digital companion, developed in 2023.
@@ -93,7 +174,6 @@ USER2 = """
 """
 
 def zoebot():
-    urllib3.disable_warnings()
     options = {
         "model": MODEL_NAME,
         'max_tokens': 4096,
@@ -102,7 +182,7 @@ def zoebot():
         'n': 1,
         'cache_prompt': True,
     }
-    llm = streamingllm.LineStreamingLLM(streamingllm.StreamingLLM(OPENAI_URL, API_KEY, options, insecure=True))
+    llm = streamingllm.LineStreamingLLM(streamingllm.StreamingLLM(OPENAI_URL + '/v1/chat/completions', API_KEY, options, insecure=True))
 
     messages = [
         { 'role': 'system', 'content': 'You are helpful assistant.' },
@@ -115,5 +195,13 @@ def zoebot():
         if line is None:
             break
         print(line)
+
+
+urllib3.disable_warnings()
+tc = TokenCounting(OPENAI_URL, API_KEY, { 'model': 'zeonzone' }, insecure=True)
+print(tc.count('hepparallaa hejoo sweden!'))
+
+em = Embedding(OPENAI_URL, API_KEY, { 'model': 'multilingual-e5-large-instruct' }, insecure=True)
+print(em.embedding('hepparallaa hejoo sweden!'))
 
 zoebot()
