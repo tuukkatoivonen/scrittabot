@@ -1,67 +1,18 @@
 #!/usr/bin/env python3
 
-import urllib3
-import requests
+OPENAI_URL = 'https://zeonzone.zonet:4001'
+MODEL_LLM = 'zeonzone'
+MODEL_EMBEDDING = 'multilingual-e5-large-instruct'
+EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query Query: '
+API_KEY = 'sk-pZY6hfPYOhLXRqxNJ0scCw'
 
 from smolagents.local_python_executor import (
     BASE_PYTHON_TOOLS,
     evaluate_python_code,
 )
 
-import streamingllm
+import llm
 
-OPENAI_URL = 'https://zeonzone.zonet:4001'
-MODEL_NAME = 'zeonzone'
-API_KEY = 'sk-pZY6hfPYOhLXRqxNJ0scCw'
-
-
-class TokenCounting:
-    def __init__(self, url, api_key=None, options={}, insecure=False):
-        self.base_url = url
-        self.api_key = api_key
-        self.options = options
-        self.insecure = insecure # Corresponds to curl -k
-
-        self.session = requests.Session()
-        self.session.headers.update({
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        })
-
-    def count(self, string):
-        payload = self.options
-        payload['prompt'] = string
-        response = self.session.post(
-            self.base_url + '/utils/token_counter',
-            json = payload,
-            verify = not self.insecure
-        )
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        return response.json()['total_tokens']
-
-class Embedding:
-    def __init__(self, url, api_key=None, options={}, insecure=False):
-        self.base_url = url + '/v1/embeddings'
-        self.api_key = api_key
-        self.options = options
-        self.insecure = insecure # Corresponds to curl -k
-
-        self.session = requests.Session()
-        self.session.headers.update({
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        })
-
-    def embedding(self, string):
-        payload = self.options
-        payload['input'] = string
-        response = self.session.post(
-            self.base_url,
-            json = payload,
-            verify = not self.insecure
-        )
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        return response.json()['data'][0]['embedding']
 
 class PythonExecution:
     def __init__(self, tools):
@@ -175,33 +126,32 @@ USER2 = """
 
 def zoebot():
     options = {
-        "model": MODEL_NAME,
+        "model": MODEL_LLM,
         'max_tokens': 4096,
         'temperature': 0.0,
         'top_p': 1.0,
         'n': 1,
         'cache_prompt': True,
     }
-    llm = streamingllm.LineStreamingLLM(streamingllm.StreamingLLM(OPENAI_URL + '/v1/chat/completions', API_KEY, options, insecure=True))
+    llm_lines = llm.LlmLineStreaming(llm.Llm(OPENAI_URL, API_KEY, options, insecure=True))
 
     messages = [
         { 'role': 'system', 'content': 'You are helpful assistant.' },
         { 'role': 'user', 'content': 'Could you describe how cars are built?' }
     ]
-    llm.request_data(messages)
+    llm_lines.completion(messages)
 
     while True:
-        line = llm.get_next_line()
+        line = llm_lines.get_next_line()
         if line is None:
             break
         print(line)
 
 
-urllib3.disable_warnings()
-tc = TokenCounting(OPENAI_URL, API_KEY, { 'model': 'zeonzone' }, insecure=True)
-print(tc.count('hepparallaa hejoo sweden!'))
+tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
+print(tc.count_tokens('hepparallaa hejoo sweden!'))
 
-em = Embedding(OPENAI_URL, API_KEY, { 'model': 'multilingual-e5-large-instruct' }, insecure=True)
+em = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_EMBEDDING }, embedding_query=EMBEDDING_QUERY, insecure=True)
 print(em.embedding('hepparallaa hejoo sweden!'))
 
 zoebot()

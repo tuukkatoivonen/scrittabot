@@ -1,32 +1,27 @@
 import json
 import requests
+import urllib3
 
-class StreamingLLM:
-    def __init__(self, url, api_key=None, options={}, insecure=False):
-        """
-        Initializes the StreamingLLM client.
 
-        Args:
-            url (str): The LLM endpoint URL.
-            model (str): The model name to use.
-            api_key (str): The LLM key for authorization.
-            insecure (bool): If True, disables SSL certificate verification (like curl -k).
-        """
+class Llm:
+    def __init__(self, url, api_key=None, options={}, embedding_query='', insecure=False):
         self.base_url = url
         self.api_key = api_key
         self.options = options
-        self.insecure = insecure # Corresponds to curl -k
+        self.insecure = insecure
+        if self.insecure:
+            urllib3.disable_warnings()
+        self.embedding_query = embedding_query
 
         self.session = requests.Session()
-        self.session.headers.update({
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}"
-        })
+        self.session.headers.update({ "Content-Type": "application/json" })
+        if self.api_key:
+            self.session.headers.update({ "Authorization": f"Bearer {self.api_key}" })
 
         self.current_response = None
         self.response_iterator = None
 
-    def request_data(self, messages):
+    def completion(self, messages):
         """
         Initiates a streaming request to the LLM.
 
@@ -46,18 +41,18 @@ class StreamingLLM:
 
         try:
             self.current_response = self.session.post(
-                self.base_url,
-                json=payload,
-                stream=True,
-                verify=not self.insecure  # verify=False if self.insecure is True
+                self.base_url + '/v1/chat/completions',
+                json = payload,
+                stream = True,
+                verify = not self.insecure
             )
             self.current_response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
             self.response_iterator = self.current_response.iter_lines()
-            return True
         except requests.exceptions.RequestException as e:
             print(f"Error initiating request: {e}")
             self._cleanup_stream()
             return False
+        return True
 
     def get_next_chunk(self):
         """
@@ -131,14 +126,36 @@ class StreamingLLM:
         print("Aborting stream...")
         self._cleanup_stream()
 
+    def count_tokens(self, string):
+        payload = self.options
+        payload['prompt'] = string
+        response = self.session.post(
+            self.base_url + '/utils/token_counter',
+            json = payload,
+            verify = not self.insecure
+        )
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        return response.json()['total_tokens']
+
+    def embedding(self, string):
+        payload = self.options
+        payload['input'] = self.embedding_query + string
+        response = self.session.post(
+            self.base_url + '/v1/embeddings',
+            json = payload,
+            verify = not self.insecure
+        )
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        return response.json()['data'][0]['embedding']
+
     def __del__(self):
         """Ensure resources are cleaned up when the object is garbage collected."""
         self.abort()
         if self.session: # Check if session was initialized
             self.session.close()
 
-class LineStreamingLLM:
-    def __init__(self, streaming_api: StreamingLLM):
+class LlmLineStreaming:
+    def __init__(self, llm: Llm):
         """
         Initializes the LineStreamingLLM, which wraps a StreamingLLM instance
         to provide line-by-line data retrieval.
@@ -146,12 +163,12 @@ class LineStreamingLLM:
         Args:
             streaming_api (StreamingLLM): An instance of StreamingLLM to use for fetching data.
         """
-        if not isinstance(streaming_api, StreamingLLM):
-            raise TypeError("streaming_api must be an instance of StreamingLLM")
-        self.streaming_api = streaming_api
+        if not isinstance(llm, Llm):
+            raise TypeError("llm must be an instance of Llm")
+        self.llm = llm
         self.line_buffer = "" # Buffer to accumulate chunks into lines
 
-    def request_data(self, messages):
+    def completion(self, messages):
         """
         Initiates a streaming request using the underlying StreamingLLM.
         Clears any existing line buffer.
@@ -164,7 +181,7 @@ class LineStreamingLLM:
             bool: True if the request was initiated successfully, False otherwise.
         """
         self.line_buffer = ""  # Clear buffer for a new request
-        return self.streaming_api.request_data(messages)
+        return self.llm.completion(messages)
 
     def get_next_line(self):
         """
@@ -190,7 +207,7 @@ class LineStreamingLLM:
                 return line
 
             # If no newline in buffer, fetch more data from the underlying LLM
-            chunk = self.streaming_api.get_next_chunk()
+            chunk = self.llm.get_next_chunk()
 
             if chunk is None:  # Stream has ended
                 if self.line_buffer:  # If there's anything left in the buffer, it's the last line
@@ -212,14 +229,5 @@ class LineStreamingLLM:
         """
         Aborts the current request via the underlying StreamingLLM and clears the line buffer.
         """
-        self.streaming_api.abort()
+        self.llm.abort()
         self.line_buffer = ""  # Clear buffer on abort
-
-    def __del__(self):
-        """
-        Destructor to clear the line buffer. The underlying StreamingLLM instance
-        is responsible for its own resource cleanup (like closing sessions).
-        """
-        self.line_buffer = ""
-        # No need to call self.streaming_api.abort() here if StreamingLLM's __del__ already does it,
-        # to avoid redundant calls. Assuming StreamingLLM handles its own cleanup.
