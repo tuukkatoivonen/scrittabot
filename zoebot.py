@@ -133,20 +133,14 @@ def zoebot():
         'n': 1,
         'cache_prompt': True,
     }
-    llm_lines = llm.LlmLineStreaming(llm.Llm(OPENAI_URL, API_KEY, options, insecure=True))
+    _llm = llm.LlmLineStreaming(OPENAI_URL, API_KEY, options, insecure=True)
 
     messages = [
         { 'role': 'system', 'content': 'You are helpful assistant.' },
         { 'role': 'user', 'content': 'Could you describe how cars are built?' }
     ]
-    llm_lines.completion(messages)
-
-    while True:
-        line = llm_lines.get_next_line()
-        if line is None:
-            break
-        print(line)
-
+    for l in _llm.completion(messages):
+        print(l)
 
 tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
 print(tc.count_tokens('hepparallaa hejoo sweden!'))
