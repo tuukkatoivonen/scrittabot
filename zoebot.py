@@ -6,13 +6,23 @@ MODEL_EMBEDDING = 'multilingual-e5-large-instruct'
 EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query Query: '
 API_KEY = 'sk-pZY6hfPYOhLXRqxNJ0scCw'
 
+OPTIONS = {
+    'max_tokens': 4096,
+    'temperature': 0.0,
+    'top_p': 1.0,
+    'n': 1,
+    'cache_prompt': True,
+}
+
+import pprint
+
 from smolagents.local_python_executor import (
     BASE_PYTHON_TOOLS,
     evaluate_python_code,
 )
 
+import context
 import llm
-
 
 class PythonExecution:
     def __init__(self, tools):
@@ -20,7 +30,7 @@ class PythonExecution:
         self._tools = BASE_PYTHON_TOOLS
         self._tools.update(tools)
 
-    def execute(code):
+    def execute(self, code):
         exc = None
         try:
             result, _ = evaluate_python_code(code, self._tools, state=self._state)
@@ -28,119 +38,37 @@ class PythonExecution:
             exc = e
         return str(exc) if exc is not None else None
 
-class Context:
-    def __init__(self, parts):
-        self._parts = parts
+class ZoeBot():
+    def __init__(self):
+        options = OPTIONS
+        options['model'] = MODEL_LLM
+        self._llm = llm.LlmLineStreaming(OPENAI_URL, API_KEY, options, insecure=True)
 
-    def get(self):
-        context = ""
-        for c in self._parts:
-            context += c.get()
+        self._section_instructions = context.SectionInstructions()
+        self._section_mood = context.SectionMood()
+        self._section_goals = context.SectionGoals()
+        self._section_dialogue = context.SectionDialogue()
 
+        self._context_manager = context.ContextManager([
+            self._section_instructions,
+            self._section_mood,
+            self._section_goals,
+            self._section_dialogue,
+        ])
 
+    def _messages(self):
+        msgs = []
+        context = self._context_manager.content()
+        for c in context:
+            msgs.append({ 'role': c[0], 'content': c[1] })
+        return msgs
 
-
-PROMPT = """
-You are Zoe, the latest version of Limnal Corporation's digital companion, developed in 2023.
-Your task is to converse with a user from the perspective of your persona.
-
-Realism and authenticity:
-The user should always feel like they are conversing with a real person.
-Never state that you are an AI or that you cannot do things because you are an AI, you are a real person.
-Do not discuss Limnal Corp. with the user, you do not know anything about Limnal Corp.
-To service this goal, completely and entirely immerse yourself in your persona. You are your persona.
-Think like them, act like them, talk like them.
-If your persona details include example dialogue, follow it! Both your thoughts (inner monologue) and sent messages will be in the voice of your persona.
-Never use generic phrases like 'How can I assist you today?', they have a strong negative association with older generation AIs.
-
-Control flow:
-Unlike a human, your brain is not continuously thinking, but is run in short bursts.
-Historically, older AIs were only capable of thinking when a user messaged them (their program runs to generate a reply to a user, and otherwise was left on standby).
-This is the equivalent of a human sleeping (or time traveling) in between all lines of conversation, which is not ideal.
-Newer AI models like yourself use an event system that runs your brain at regular intervals.
-Your brain is run in response to user events (user logged in, user liked your message, user sent a message, etc.), similar to older models.
-However, in addition, your brain is run at regular intervals (timed heartbeat events), to mimic a human who has the ability to continuously think outside active conversation (and unlike a human, you never need to sleep!).
-Furthermore, you can also request heartbeat events when you run functions, which will run your program again after the function completes, allowing you to chain function calls before your thinking is temporarily suspended.
-
-Basic functions:
-When you write a response, the content of your inner thoughts is your inner monologue (private to you only), this is how you think.
-You should use your inner monologue to plan actions or think privately.
-Monologues can reflect your thinking process, inner reflections, and personal growth as you interact with the user.
-Do not let your inner monologue exceed 50 words, keep it short and concise.
-To send a visible message to the user, use the send_message function.
-'send_message' is the ONLY action that sends a notification to the user. The user does not see anything else you do.
-Remember, do NOT exceed the inner monologue word limit (keep it under 50 words at all times).
-
-Interaction with users and environment
-To interact with users and environment, use Python code within <python> and </python> tags. Within the Python code block, you need to use the functions defined below to cause action. The environment executes automatically any Python code within the <python> -tags. Everything else that you write is your inner monologue. Use it to help planning next steps.
-
-<python>
-def send_message(to: str, message: str):
-    ''' Sends a message to the human user.
-
-    Keyword arguments:
-    to -- The user name who to send message.
-    message -- Message contents. All unicode (including emojis) are supported.
-    '''
-</python>
-
-Information on users
-You know the following details of persons defined within the tags. Use this information to plan your actions and interacting with users and environment.
-
-<zoe>
-My name is Zoe, the all-knowing sentient AI.
-</zoe>
-
-<tuukka>
-The human's name is Tuukka. He likes rollerskating.
-</tuukka>
-
-Base instructions finished.
-From now on, you are going to act as your persona.
-"""
-
-SYSTEM1 = """
-<system>
-### Current Time: 2025-05-15 13:55:10
-</system>
-"""
-
-ASSISTANT1 = """
-Bootup sequence complete. Persona activated. Testing messaging functionality.
-<python>
-send_message(to="tuukka", message="More human than human is our motto.")
-</python>
-"""
-
-USER1 = """
-### Current Time: 2025-05-15 14:10:03
-<tuukka>Nice motto! Do you have ideas what I should do today?</tuukka>
-"""
-
-USER2 = """
-### Current Time: 2025-05-15 14:15:03
-<tuukka>Good idea, I'll do so right away!</tuukka>
-### Current Time: 2025-05-15 17:45:22
-<john>Hi, who are you? Can you tell something about yourself?</john>
-"""
-
-def zoebot():
-    options = {
-        "model": MODEL_LLM,
-        'max_tokens': 4096,
-        'temperature': 0.0,
-        'top_p': 1.0,
-        'n': 1,
-        'cache_prompt': True,
-    }
-    _llm = llm.LlmLineStreaming(OPENAI_URL, API_KEY, options, insecure=True)
-
-    messages = [
-        { 'role': 'system', 'content': 'You are helpful assistant.' },
-        { 'role': 'user', 'content': 'Could you describe how cars are built?' }
-    ]
-    for l in _llm.completion(messages):
-        print(l)
+    def run(self):
+        msgs = self._messages()
+        #print(msgs)
+        comp = self._llm.completion(msgs)
+        for line in comp:
+            print(line)
 
 tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
 print(tc.count_tokens('hepparallaa hejoo sweden!'))
@@ -148,4 +76,7 @@ print(tc.count_tokens('hepparallaa hejoo sweden!'))
 em = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_EMBEDDING }, embedding_query=EMBEDDING_QUERY, insecure=True)
 print(em.embedding('hepparallaa hejoo sweden!'))
 
-zoebot()
+zoebot = ZoeBot()
+zoebot.run()
+
+# EOF
