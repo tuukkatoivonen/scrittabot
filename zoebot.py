@@ -19,6 +19,7 @@ import pprint
 import context
 import llm
 import python_execution
+import tools
 
 class ZoeBot():
     def __init__(self):
@@ -26,15 +27,18 @@ class ZoeBot():
         options['model'] = MODEL_LLM
         self._llm = llm.LlmLineStreaming(OPENAI_URL, API_KEY, options, insecure=True)
 
+        self._tool_list = [ tools.ToolSetBasic() ]
+
+        self._python_execution = python_execution.PythonExecution(self._tool_list)
         self._section_instructions = context.SectionInstructions()
-        self._python_execution = python_execution.PythonExecution()
+        self._section_tools = context.SectionTools(self._tool_list)
         self._section_mood = context.SectionMood()
         self._section_goals = context.SectionGoals()
         self._section_dialogue = context.SectionDialogue()
 
         self._context_manager = context.ContextManager([
             self._section_instructions,
-            self._python_execution,
+            self._section_tools,
             self._section_mood,
             self._section_goals,
             self._section_dialogue,
@@ -46,9 +50,6 @@ class ZoeBot():
         for c in context:
             msgs.append({ 'role': c[0], 'content': c[1] })
         return msgs
-
-    def _execute_python(self, python):
-        print(f'EXEC: {python}')
 
     def run(self):
         msgs = self._messages()

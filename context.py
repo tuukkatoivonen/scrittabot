@@ -24,6 +24,19 @@ class SectionInstructions(Section):
     def content(self):
         return [[ 'system', system_prompt.SYSTEM_PROMPT + '\n' ]]
 
+class SectionTools(Section):
+    def __init__(self, tool_list):
+        super().__init__()
+        self._tool_list = tool_list
+
+    def content(self):
+        prompt = '## Functions\n\nThese special functions are available for you to help to advance your goals.\n\n```python\n'
+        for tool in self._tool_list:
+            for t in tool.tools():
+                prompt += 'def ' + t[0] + '\n'
+        prompt += '```\n\n'
+        return [[ 'system', prompt ]]
+
 class SectionMood(Section):
     def __init__(self):
         super().__init__()
