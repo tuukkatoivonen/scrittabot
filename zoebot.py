@@ -16,27 +16,9 @@ OPTIONS = {
 
 import pprint
 
-from smolagents.local_python_executor import (
-    BASE_PYTHON_TOOLS,
-    evaluate_python_code,
-)
-
 import context
 import llm
-
-class PythonExecution:
-    def __init__(self, tools):
-        self._state = {}
-        self._tools = BASE_PYTHON_TOOLS
-        self._tools.update(tools)
-
-    def execute(self, code):
-        exc = None
-        try:
-            result, _ = evaluate_python_code(code, self._tools, state=self._state)
-        except Exception as e:
-            exc = e
-        return str(exc) if exc is not None else None
+import python_execution
 
 class ZoeBot():
     def __init__(self):
@@ -45,12 +27,14 @@ class ZoeBot():
         self._llm = llm.LlmLineStreaming(OPENAI_URL, API_KEY, options, insecure=True)
 
         self._section_instructions = context.SectionInstructions()
+        self._python_execution = python_execution.PythonExecution()
         self._section_mood = context.SectionMood()
         self._section_goals = context.SectionGoals()
         self._section_dialogue = context.SectionDialogue()
 
         self._context_manager = context.ContextManager([
             self._section_instructions,
+            self._python_execution,
             self._section_mood,
             self._section_goals,
             self._section_dialogue,
@@ -68,6 +52,7 @@ class ZoeBot():
 
     def run(self):
         msgs = self._messages()
+        #pprint.pp(msgs)
         comp = self._llm.completion(msgs)
         in_python = False
         for line in comp:
@@ -75,7 +60,7 @@ class ZoeBot():
             line_strip = line.strip()
             if line_strip == '```' and in_python:
                 in_python = False
-                self._execute_python(python)
+                self._python_execution.execute(python)
             if in_python:
                 python += line + '\n'
             if line_strip == '```python':
