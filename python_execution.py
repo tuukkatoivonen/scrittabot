@@ -18,6 +18,7 @@ class PythonExecution(context.Section):
         add_goal = partial(self._add_goal)
         delete_goal = partial(self._delete_goal)
         search_document = partial(self._search_document)
+        sleep = partial(self._sleep)
 
         tools = {
             'make_note': make_note,
@@ -29,6 +30,7 @@ class PythonExecution(context.Section):
             'add_goal': add_goal,
             'delete_goal': delete_goal,
             'search_document': search_document,
+            'sleep': sleep,
         }        
 
         self._tools = BASE_PYTHON_TOOLS
@@ -75,6 +77,9 @@ class PythonExecution(context.Section):
 
     def _search_document(self, document_name: str, query: str):
         print('search_document')
+
+    def _sleep(min_time):
+        print('sleep')
 
 
     def _get_prompt(self):
@@ -143,6 +148,15 @@ def search_document(document_name: str, query: str):
     Searches for information within a specified document (e.g., 'faq.txt', 'manual.pdf').
     Returns relevant text snippets from the document.
     Example: search_document(name='user_manual.txt', query='how to reset device')
+    """
+
+def sleep(min_time: Optional[int]):
+    """
+    Suspends AI from running and thinking for a minimum of 'min_time' minutes or
+    until a system event is received (such as an user message), whichever occurs sooner.
+    AI should call always this function when there are no more actions that it could take
+    to advance its goals.
+    Example: sleep()
     """
 ```
 '''
