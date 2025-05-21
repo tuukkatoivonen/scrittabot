@@ -63,12 +63,24 @@ class ZoeBot():
             msgs.append({ 'role': c[0], 'content': c[1] })
         return msgs
 
+    def _execute_python(self, python):
+        print(f'EXEC: {python}')
+
     def run(self):
         msgs = self._messages()
-        #print(msgs)
         comp = self._llm.completion(msgs)
+        in_python = False
         for line in comp:
             print(line)
+            line_strip = line.strip()
+            if line_strip == '```' and in_python:
+                in_python = False
+                self._execute_python(python)
+            if in_python:
+                python += line + '\n'
+            if line_strip == '```python':
+                in_python = True
+                python = ''
 
 tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
 print(tc.count_tokens('hepparallaa hejoo sweden!'))
