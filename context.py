@@ -101,17 +101,19 @@ class SectionGoals(Section):
 class SectionDialogue(Section):
     def __init__(self):
         super().__init__()
-        turn1 = f'<system time="{get_time()}">\nBootup sequence complete. Persona activated.\n</system>'
-        turn2 = "Let's first test if Python code execution works.\n```python\nx = 1 + 2\nprint(x)\n```"
-        turn3 = f'<output time="{get_time()}">\n3\n</output>'
-        self._chunks = [
-            [ 'user', turn1 ],
-            [ 'assistant', turn2 ],
-            [ 'user', turn3 ],
-        ]
+        self._chunks = []
+        self.add_chunk('system', 'Bootup sequence complete. Persona activated.')
+        self.add_chunk(None, "Let's first test if Python code execution works.\n```python\nx = 1 + 2\nprint(x)\n```")
+        self.add_chunk('output', '3')
 
-    def add_chunk(role, content):
-        self._chunks.append([ role, content ])
+    def add_chunk(self, tag, content, extra=''):
+        if not tag:
+            self._chunks.append([ 'assistant', content + '\n' ])
+            return
+        if extra:
+            extra = ' ' + extra.strip()
+        extra += f' time="{get_time()}"'
+        self._chunks.append([ 'user', f'<{tag}{extra}>\n{content}\n</{tag}>\n' ])
 
     def content(self):
         return self._chunks
