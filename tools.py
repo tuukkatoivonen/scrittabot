@@ -38,13 +38,6 @@ class ToolSetBasic():
     """
 ''', self._search_note),
 
-('''send_message(user: str, message: str):
-    """
-    Sends a message to the specified user. This is the only way to communicate with users.
-    Example: send_message(user='bob', message='Hello Bob, how are you today?')
-    """
-''', self._send_message),
-
 ('''increase_mood(mood_name: str):
     """
     Increases the specified mood (e.g., 'happy') by a small amount.
@@ -92,10 +85,6 @@ class ToolSetBasic():
     def _search_note(self, keywords: list[str] = None, summary_contains: str = None, date_from: str = None, date_to: str = None):
         print('search_note')
         self._print('No notes available')
-
-    def _send_message(self, user: str, message: str):
-        print('send_message')
-        self._print('Unknown user')
 
     def _increase_mood(self, mood_name: str):
         print('increase_mood')

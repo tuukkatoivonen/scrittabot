@@ -21,6 +21,7 @@ import context
 import llm
 import python_execution
 import tools
+import tool_matrix
 
 class ZoeBot():
     def __init__(self):
@@ -30,9 +31,11 @@ class ZoeBot():
 
         self._tools_basic = tools.ToolSetBasic()
         self._tools_sleep = tools.ToolSetSleep()
+        self._tools_matrix = tool_matrix.ToolSetMatrix()
         self._tool_list = [
             self._tools_basic,
             self._tools_sleep,
+            self._tools_matrix,
         ]
         self._python_execution = python_execution.PythonExecution(self._tool_list)
 
