@@ -5,8 +5,10 @@ from smolagents.local_python_executor import (
 
 class PythonExecution():
     def __init__(self, tool_list):
+        self._state = {}
         tooldict = {}
         for tool in tool_list:
+            tool.set_print(self._custom_print)
             for t in tool.tools():
                 i = t[0].find('(')
                 if i == -1:
@@ -17,15 +19,16 @@ class PythonExecution():
                 tooldict[name] = t[1]
         self._tooldict = BASE_PYTHON_TOOLS
         self._tooldict.update(tooldict)
-        self._state = {}
+
+    def _custom_print(self, s):
+        self._state["_print_outputs"].value += s + '\n'
 
     def execute(self, code):
         print(f'EXECUTE: {code}')
 
-        exc = None
         try:
             result, _ = evaluate_python_code(code, self._tooldict, state=self._state)
         except Exception as e:
-            exc = e
-            print(f'EXCEPTION: {exc}')
-        return str(exc) if exc is not None else None
+            print(f'EXCEPTION: {e}')
+            self._custom_print(str(e))
+        return self._state["_print_outputs"].value
