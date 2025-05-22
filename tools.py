@@ -1,4 +1,3 @@
-from functools import partial
 from typing import Optional
 
 class ToolSetBasic():
@@ -20,7 +19,7 @@ class ToolSetBasic():
     Keywords help in retrieving the note later.
     Example: make_note(summary='User Bob enjoys jazz music from the 1950s', keywords=['bob', 'music', 'jazz', '1950s'])
     """
-''', partial(self._make_note)),
+''', self._make_note),
 
 ('''replace_note(ref: str, summary: str = None, keywords: list[str] = None):
     """
@@ -30,21 +29,21 @@ class ToolSetBasic():
     Example (update): replace_note(ref='123', summary='User Bob likes classical and jazz music')
     Example (delete): replace_note(ref='123', summary=None)
     """
-''', partial(self._replace_note)),
+''', self._replace_note),
 
 ('''search_note(keywords: list[str] = None, summary_contains: str = None, date_from: str = None, date_to: str = None):
     """
     Searches for notes. You can search by keywords, text within the summary, or date range.
     Example: search_note(keywords=['bob', 'music'])
     """
-''', partial(self._search_note)),
+''', self._search_note),
 
 ('''send_message(user: str, message: str):
     """
     Sends a message to the specified user. This is the only way to communicate with users.
     Example: send_message(user='bob', message='Hello Bob, how are you today?')
     """
-''', partial(self._send_message)),
+''', self._send_message),
 
 ('''increase_mood(mood_name: str):
     """
@@ -52,28 +51,28 @@ class ToolSetBasic():
     Mood names are: 'sad', 'happy', 'afraid', 'angry', 'surprised', 'disgusted'.
     Example: increase_mood(mood_name='happy')
     """
-''', partial(self._increase_mood)),
+''', self._increase_mood),
 
 ('''decrease_mood(mood_name: str):
     """
     Decreases the specified mood (e.g., 'sad') by a small amount.
     Example: decrease_mood(mood_name='sad')
     """
-''', partial(self._decrease_mood)),
+''', self._decrease_mood),
 
 ('''add_goal(goal_description: str):
     """
     Adds a new goal to your list of goals.
     Example: add_goal(goal_description="Find out user Alice's favorite color")
     """
-''', partial(self._add_goal)),
+''', self._add_goal),
 
 ('''delete_goal(goal_index: int):
     """
     Deletes a goal from your list using its numerical index.
     Example: delete_goal(goal_index=2)
     """
-''', partial(self._delete_goal)),
+''', self._delete_goal),
 
 ('''search_document(document_name: str, query: str):
     """
@@ -81,7 +80,7 @@ class ToolSetBasic():
     Returns relevant text snippets from the document.
     Example: search_document(name='user_manual.txt', query='how to reset device')
     """
-''', partial(self._search_document)),
+''', self._search_document),
 
 ('''sleep(min_time: Optional[int]):
     """
@@ -91,7 +90,7 @@ class ToolSetBasic():
     to advance its goals.
     Example: sleep()
     """
-''', partial(self._sleep)),
+''', self._sleep),
         ]
 
     def _make_note(self, summary: str, keywords: list[str]):
