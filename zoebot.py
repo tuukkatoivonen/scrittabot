@@ -14,6 +14,7 @@ OPTIONS = {
     'cache_prompt': True,
 }
 
+import time
 import pprint
 
 import context
@@ -27,9 +28,14 @@ class ZoeBot():
         options['model'] = MODEL_LLM
         self._llm = llm.LlmLineStreaming(OPENAI_URL, API_KEY, options, insecure=True)
 
-        self._tool_list = [ tools.ToolSetBasic() ]
-
+        self._tools_basic = tools.ToolSetBasic()
+        self._tools_sleep = tools.ToolSetSleep()
+        self._tool_list = [
+            self._tools_basic,
+            self._tools_sleep,
+        ]
         self._python_execution = python_execution.PythonExecution(self._tool_list)
+
         self._section_instructions = context.SectionInstructions()
         self._section_tools = context.SectionTools(self._tool_list)
         self._section_mood = context.SectionMood()
@@ -51,7 +57,7 @@ class ZoeBot():
             msgs.append({ 'role': c[0], 'content': c[1] })
         return msgs
 
-    def run(self):
+    def _run_llm(self):
         msgs = self._messages()
         #pprint.pp(msgs)
         comp = self._llm.completion(msgs)
@@ -61,12 +67,30 @@ class ZoeBot():
             line_strip = line.strip()
             if line_strip == '```' and in_python:
                 in_python = False
-                self._python_execution.execute(python)
+                output = self._python_execution.execute(python)
+                if output:
+                    self._section_dialogue.add_chunk('output', output)
             if in_python:
                 python += line + '\n'
             if line_strip == '```python':
                 in_python = True
                 python = ''
+
+    def run(self):
+        while True:
+            self._run_llm()
+            sleep = self._tools_sleep.get_sleep()
+            wake = None
+            if sleep is not None and sleep >= 0:
+                wake = int(time.time()) + 60*sleep + 1
+            while wake is None or int(time.time()) < wake:
+                events = 0
+                # Check events, break if any
+                if events > 0:
+                    break
+                if sleep is not None and sleep <= 0:
+                    break
+                time.sleep(1)
 
 tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
 print(tc.count_tokens('hepparallaa hejoo sweden!'))

@@ -21,7 +21,7 @@ class PythonExecution():
         self._tooldict.update(tooldict)
 
     def _custom_print(self, s):
-        self._state["_print_outputs"].value += s + '\n'
+        self._state["_print_outputs"].value += s
 
     def execute(self, code):
         print(f'EXECUTE: {code}')

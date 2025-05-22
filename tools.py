@@ -81,16 +81,6 @@ class ToolSetBasic():
     Example: search_document(name='user_manual.txt', query='how to reset device')
     """
 ''', self._search_document),
-
-('''sleep(min_time: Optional[int]):
-    """
-    Suspends AI from running and thinking for a minimum of 'min_time' minutes or
-    until a system event is received (such as an user message), whichever occurs sooner.
-    AI should call always this function when there are no more actions that it could take
-    to advance its goals.
-    Example: sleep()
-    """
-''', self._sleep),
         ]
 
     def _make_note(self, summary: str, keywords: list[str]):
@@ -123,6 +113,31 @@ class ToolSetBasic():
         print('search_document')
         self._print('Document not found')
 
-    def _sleep(min_time: Optional[int]):
-        print('sleep')
+
+class ToolSetSleep(ToolSetBasic):
+    def __init__(self):
+        super().__init__()
+        self._set_sleep = -1    # -1: do not sleep but return immediately to processing
+
+    def tools(self):
+        return [
+('''sleep(min_time: Optional[int]):
+    """
+    Suspends AI from running and thinking for a minimum of 'min_time' minutes or
+    until a system event is received (such as an user message), whichever occurs sooner.
+    AI should call always this function when there are no more actions that it could take
+    to advance its goals. If optional 'min_time' is not given, sleep until next system event.
+    Example: sleep()
+    """
+''', self._sleep),
+        ]
+
+    def get_sleep(self):
+        s = self._set_sleep
+        self._set_sleep = -1
+        return s
+
+    def _sleep(min_time: Optional[int] = None):
+        self._set_sleep = min_time
+        print(f'sleep {min_time}')
 
