@@ -84,12 +84,11 @@ class ZoeBot():
                 in_python = True
                 python = ''
         self._section_dialogue.add_chunk(None, completion)
-        for o in output:
-            self._section_dialogue.add_chunk('output', o)
+        return output
 
     def run(self):
         while True:
-            self._run_llm()
+            output = self._run_llm()
             sleep = self._tools_sleep.get_sleep()
             wake = None
             if sleep is not None and sleep >= 0:
@@ -98,6 +97,11 @@ class ZoeBot():
                 events = 0
 
                 # Check events, break if any
+                events += len(output)
+                for o in output:
+                    self._section_dialogue.add_chunk('output', o)
+                output = []
+
                 matrix_events = self._tools_matrix.get_events()
                 events += len(matrix_events)
                 for m in matrix_events:
