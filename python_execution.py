@@ -24,8 +24,6 @@ class PythonExecution():
         self._state["_print_outputs"].value += s
 
     def execute(self, code):
-        print(f'EXECUTE: {code}')
-
         try:
             result, _ = evaluate_python_code(code, self._tooldict, state=self._state)
         except Exception as e:
