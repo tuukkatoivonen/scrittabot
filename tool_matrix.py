@@ -83,19 +83,22 @@ class ToolSetMatrix(tools.ToolSetBasic):
 
         r = []
         for e in events:
-            if e.source['type'] != 'm.room.message':
+            if e[1].source['type'] != 'm.room.message':
                 continue
-            if e.sender == self._credentials.user_id:
+            if e[1].sender == self._credentials['user_id']:
                 continue        # Skip events from self
-            r.append(e)
+            r.append({
+                'type': e[1].source['type'],
+                'sender': e[1].source['sender'],
+                'room': e[0].display_name,
+                'msgtype': e[1].source['content']['msgtype'],
+                'body': e[1].source['content']['body'],
+                'origin_server_ts': e[1].source['origin_server_ts'],
+            })
         return r
 
     async def _event_callback(self, room: nio.MatrixRoom, event: nio.RoomMessageText) -> None:
         self._events.append((room, event))
-        print(
-            f'Message received in room {room.display_name}\n'
-            f'{room.user_name(event.sender)} | {event.body}'
-        )
 
     def _sync(self):
         self._event_loop.run_until_complete(self._client.sync(timeout=self._timeout, full_state=True))

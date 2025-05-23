@@ -65,19 +65,25 @@ class ZoeBot():
         #pprint.pp(msgs)
         comp = self._llm.completion(msgs)
         in_python = False
+        completion = ''
+        output = []
         for line in comp:
             print(line)
+            completion += line + '\n'
             line_strip = line.strip()
             if line_strip == '```' and in_python:
                 in_python = False
-                output = self._python_execution.execute(python)
-                if output:
-                    self._section_dialogue.add_chunk('output', output)
+                out = self._python_execution.execute(python)
+                if out:
+                    output.append(out)
             if in_python:
                 python += line + '\n'
             if line_strip == '```python':
                 in_python = True
                 python = ''
+        self._section_dialogue.add_chunk(None, completion)
+        for o in output:
+            self._section_dialogue.add_chunk('output', o)
 
     def run(self):
         while True:
@@ -88,7 +94,13 @@ class ZoeBot():
                 wake = int(time.time()) + 60*sleep + 1
             while wake is None or int(time.time()) < wake:
                 events = 0
+
                 # Check events, break if any
+                matrix_events = self._tools_matrix.get_events()
+                events += len(matrix_events)
+                for m in matrix_events:
+                    self._section_dialogue.add_chunk('message', m['body'], extra=f'user="{m["sender"]}"')
+
                 if events > 0:
                     break
                 if sleep is not None and sleep <= 0:
