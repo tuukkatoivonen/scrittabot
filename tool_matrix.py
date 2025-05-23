@@ -1,4 +1,5 @@
 import asyncio
+import markdown
 from typing import Optional
 
 import nio
@@ -49,7 +50,8 @@ class ToolSetMatrix(tools.ToolSetBasic):
 ('''send_message(message: str):
     """
     Sends a message to the users. This is the only way to communicate with users.
-    Example: send_message(message='Hello, how are you today?')
+    Supports Markdown for formatting.
+    Example: send_message(message='**Hello**! How are you today?')
     """
 ''', self._send_message),
         ]
@@ -62,11 +64,17 @@ class ToolSetMatrix(tools.ToolSetBasic):
         self._sync()
         room_id = self._event_loop.run_until_complete(self._map_roominfo_to_roomid(self._default_room))
 
+        html = markdown.markdown(message, extensions=['tables', 'extra', 'sane_lists'])
         resp = self._event_loop.run_until_complete(self._client.room_send(
             # Watch out! If you join an old room you'll see lots of old messages
             room_id = room_id,
             message_type = 'm.room.message',
-            content = { 'msgtype': 'm.text', 'body': message },
+            content = {
+                'msgtype': 'm.text',
+                'format': 'org.matrix.custom.html',
+                'formatted_body': html,
+                'body': html,
+            },
             ignore_unverified_devices = True,
         ))
 
