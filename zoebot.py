@@ -14,6 +14,7 @@ OPTIONS = {
     'cache_prompt': True,
 }
 
+import asyncio
 import time
 import pprint
 
@@ -95,13 +96,17 @@ class ZoeBot():
                     break
                 time.sleep(1)
 
-tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
-print(tc.count_tokens('hepparallaa hejoo sweden!'))
+async def main():
+    tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
+    print(tc.count_tokens('hepparallaa hejoo sweden!'))
 
-em = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_EMBEDDING }, embedding_query=EMBEDDING_QUERY, insecure=True)
-print(em.embedding('hepparallaa hejoo sweden!'))
+    em = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_EMBEDDING }, embedding_query=EMBEDDING_QUERY, insecure=True)
+    print(em.embedding('hepparallaa hejoo sweden!'))
 
-zoebot = ZoeBot()
-zoebot.run()
+    zoebot = ZoeBot()
+    zoebot.run()
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 # EOF
