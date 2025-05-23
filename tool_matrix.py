@@ -6,14 +6,49 @@ import nio
 
 import tools
 
+CREDENTIALS = 'credentials.json'
+DEFAULT_ROOM = '#zonet:zeonzone.zonet'
+TIMEOUT = 30000         # milliseconds
+
 class ToolSetMatrix(tools.ToolSetBasic):
     def __init__(self):
         super().__init__()
+
         self._credentials = {}
         self._client = None         # nio client
         self._insecure = True       # Do not verify SSL
-        self._default_room = '#zonet:zeonzone.zonet'
-        asyncio.run(self._main())
+        self._default_room = DEFAULT_ROOM
+        self._timeout = TIMEOUT
+        self._events = []
+        self._event_loop = asyncio.get_event_loop()
+
+        with open(CREDENTIALS, 'r') as f:
+            self._credentials = json.load(f)
+
+        # Configuration options for the nio.AsyncClient
+        client_config = nio.AsyncClientConfig(
+            max_limit_exceeded = 0,
+            max_timeouts = 0,
+            store_sync_tokens = True,
+            encryption_enabled = True,
+        )
+        # Initialize the matrix client based on credentials from file
+        self._client = nio.AsyncClient(
+            self._credentials['homeserver'],
+            self._credentials['user_id'],
+            device_id = self._credentials['device_id'],
+            store_path = 'store',
+            config = client_config,
+            ssl = not self._insecure,
+            proxy = None,
+        )
+        self._client.add_event_callback(self._event_callback, nio.RoomMessageText)
+
+        self._client.restore_login(
+            user_id = self._credentials['user_id'],
+            device_id = self._credentials['device_id'],
+            access_token = self._credentials['access_token'],
+        )
 
     def tools(self):
         return [
@@ -26,104 +61,44 @@ class ToolSetMatrix(tools.ToolSetBasic):
         ]
 
     def _send_message(self, message: str):
-        print('send_message')
-
-    async def __send_message(self, message: str):
         # "Logged in as @alice:example.org device id: RANDOMDID"
         # If you made a new room and haven't joined as that user, you can use
         # await self._client.join("your-room-id")
-        room_id = await self._map_roominfo_to_roomid(self._default_room)
 
-        resp = await self._client.room_send(
+        self._sync()
+        room_id = self._event_loop.run_until_complete(self._map_roominfo_to_roomid(self._default_room))
+
+        resp = self._event_loop.run_until_complete(self._client.room_send(
             # Watch out! If you join an old room you'll see lots of old messages
             room_id = room_id,
             message_type = 'm.room.message',
             content = { 'msgtype': 'm.text', 'body': message },
             ignore_unverified_devices = True,
-        )
+        ))
 
-    async def _message_callback(self, room: nio.MatrixRoom, event: nio.RoomMessageText) -> None:
+    def get_events(self):
+        self._sync()
+        events = self._events
+        self._events = []
+
+        r = []
+        for e in events:
+            if e.source['type'] != 'm.room.message':
+                continue
+            if e.sender == self._credentials.user_id:
+                continue        # Skip events from self
+            r.append(e)
+        return r
+
+    async def _event_callback(self, room: nio.MatrixRoom, event: nio.RoomMessageText) -> None:
+        self._events.append((room, event))
         print(
             f'Message received in room {room.display_name}\n'
             f'{room.user_name(event.sender)} | {event.body}'
         )
 
-    def _privacy_filter(self, dirty: str) -> str:
-        """Remove private info from string"""
-        return dirty.replace(self._credentials['access_token'], '***')
-
-    def _default_homeserver(self):
-        """Get the default homeserver (domain) from the credentials file.
-        Use the user_id, not the room_id. The room_id could be on a
-        different server owned by someone else. user_id makes more sense.
-        """
-        user = self._credentials['user_id']  # who am i
-        homeserver = user.split(':',1)[1]
-        return homeserver  # matrix.example.com
-
-    def _is_room_alias(self, room_id: str) -> bool:
-        """Determine if room identifier is a room alias.
-
-        Room aliases are of syntax: #somealias:someserver
-        This is not an exhaustive check!
-
-        """
-        return (
-            room_id
-            and len(room_id) > 3
-            and (room_id[0] == '#')
-            and ('#' not in room_id[1:])
-            and (':' in room_id)
-            and room_id.count(':') == 1
-            and (' ' not in room_id)
-            and not any(elem in room_id for elem in '[]{} ')  # contains bad chars?
-        )
-
-    async def _map_roomalias_to_roomid(self, alias) -> str:
-        """Attempt to convert room alias to room_id.
-
-        Arguments:
-        ---------
-        alias : can be an alias in the form of '#someRoomAlias:example.com'
-            can also be a room_id in the form of '!someRoomId:example.com'
-
-        room_id : room from credentials file
-    
-        If an alias try to get the corresponding room_id.
-        If anything fails it returns the original input.
-
-        Return corresponding room_id or on failure the original alias.
-
-        """
-        ret = alias
-        if self._is_room_alias(alias):
-            resp = await self._client.room_resolve_alias(alias)
-            if isinstance(resp, nio.RoomResolveAliasError):
-                print(
-                    f'room_resolve_alias for alias {alias} failed with '
-                    f'{self._privacy_filter(str(resp))}. '
-                    f'Trying operation with input {alias} anyway. Might fail.'
-                )
-            else:
-                ret = resp.room_id
-                print(
-                    f'Mapped room alias "{alias}" to room id "{ret}". '
-                    f'({resp.room_alias}, {resp.room_id}).'
-                )
-        return ret
-
-    def _short_room_alias_to_room_alias(self, short_room_alias: str):
-        """Convert 'SomeRoomAlias' to ''#SomeToomAlias:matrix.example.com'.
-        Converts short canonical local room alias to full room alias.
-        """
-        if short_room_alias in (None, ''):
-            err = 'Invalid room alias. Alias is none or empty.'
-            raise Exception(err)
-        if short_room_alias[0] == '#':
-            ret = short_room_alias + ':' + self._default_homeserver()
-        else:
-            ret = '#' + short_room_alias + ':' + self._default_homeserver()
-        return ret
+    def _sync(self):
+        self._event_loop.run_until_complete(self._client.sync(timeout=self._timeout, full_state=True))
 
     async def _map_roominfo_to_roomid(self, info: str) -> str:
         """Attempt to convert room info to room_id.
@@ -169,39 +144,80 @@ class ToolSetMatrix(tools.ToolSetBasic):
             ri += ':' + self._default_homeserver()
         return ri
 
-    async def _main(self) -> None:
-        with open('credentials.json', 'r') as f:
-            self._credentials = json.load(f)
+    async def _map_roomalias_to_roomid(self, alias) -> str:
+        """Attempt to convert room alias to room_id.
 
-        # Configuration options for the nio.AsyncClient
-        client_config = nio.AsyncClientConfig(
-            max_limit_exceeded = 0,
-            max_timeouts = 0,
-            store_sync_tokens = True,
-            encryption_enabled = True,
+        Arguments:
+        ---------
+        alias : can be an alias in the form of '#someRoomAlias:example.com'
+            can also be a room_id in the form of '!someRoomId:example.com'
+
+        room_id : room from credentials file
+    
+        If an alias try to get the corresponding room_id.
+        If anything fails it returns the original input.
+
+        Return corresponding room_id or on failure the original alias.
+
+        """
+        ret = alias
+        if self._is_room_alias(alias):
+            resp = await self._client.room_resolve_alias(alias)
+            if isinstance(resp, nio.RoomResolveAliasError):
+                print(
+                    f'room_resolve_alias for alias {alias} failed with '
+                    f'{self._privacy_filter(str(resp))}. '
+                    f'Trying operation with input {alias} anyway. Might fail.'
+                )
+            else:
+                ret = resp.room_id
+                print(
+                    f'Mapped room alias "{alias}" to room id "{ret}". '
+                    f'({resp.room_alias}, {resp.room_id}).'
+                )
+        return ret
+
+    def _is_room_alias(self, room_id: str) -> bool:
+        """Determine if room identifier is a room alias.
+
+        Room aliases are of syntax: #somealias:someserver
+        This is not an exhaustive check!
+
+        """
+        return (
+            room_id
+            and len(room_id) > 3
+            and (room_id[0] == '#')
+            and ('#' not in room_id[1:])
+            and (':' in room_id)
+            and room_id.count(':') == 1
+            and (' ' not in room_id)
+            and not any(elem in room_id for elem in '[]{} ')  # contains bad chars?
         )
 
-        # Initialize the matrix client based on credentials from file
-        self._client = nio.AsyncClient(
-            self._credentials['homeserver'],
-            self._credentials['user_id'],
-            device_id = self._credentials['device_id'],
-            store_path = 'store',
-            config = client_config,
-            ssl = not self._insecure,
-            proxy = None,
-        )
+    def _short_room_alias_to_room_alias(self, short_room_alias: str):
+        """Convert 'SomeRoomAlias' to ''#SomeToomAlias:matrix.example.com'.
+        Converts short canonical local room alias to full room alias.
+        """
+        if short_room_alias in (None, ''):
+            err = 'Invalid room alias. Alias is none or empty.'
+            raise Exception(err)
+        if short_room_alias[0] == '#':
+            ret = short_room_alias + ':' + self._default_homeserver()
+        else:
+            ret = '#' + short_room_alias + ':' + self._default_homeserver()
+        return ret
 
-        #self._client = nio.AsyncClient('https://zeonzone.zonet', '@zoebot:zeonzone.zonet')
-        self._client.add_event_callback(self._message_callback, nio.RoomMessageText)
+    def _default_homeserver(self):
+        """Get the default homeserver (domain) from the credentials file.
+        Use the user_id, not the room_id. The room_id could be on a
+        different server owned by someone else. user_id makes more sense.
+        """
+        user = self._credentials['user_id']  # who am i
+        homeserver = user.split(':',1)[1]
+        return homeserver  # matrix.example.com
 
-        #print(await self._client.login(MATRIX_PASSWORD))
-        self._client.restore_login(
-            user_id = self._credentials['user_id'],
-            device_id = self._credentials['device_id'],
-            access_token = self._credentials['access_token'],
-        )
+    def _privacy_filter(self, dirty: str) -> str:
+        """Remove private info from string"""
+        return dirty.replace(self._credentials['access_token'], '***')
 
-        await self._client.sync(timeout=30000, full_state=True)
-        await self.__send_message('Hellurei hellurei!')
-        await self._client.sync_forever(timeout=30000)  # milliseconds
