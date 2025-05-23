@@ -1,10 +1,7 @@
 #!/usr/bin/env python3
 
-OPENAI_URL = 'https://zeonzone.zonet:4001'
-MODEL_LLM = 'zeonzone'
-MODEL_EMBEDDING = 'multilingual-e5-large-instruct'
+CONFIG_FILE = 'config.json'
 EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query Query: '
-API_KEY = 'sk-pZY6hfPYOhLXRqxNJ0scCw'
 
 OPTIONS = {
     'max_tokens': 4096,
@@ -14,6 +11,7 @@ OPTIONS = {
     'cache_prompt': True,
 }
 
+import json
 import time
 import pprint
 
@@ -25,13 +23,16 @@ import tool_matrix
 
 class ZoeBot():
     def __init__(self):
+        with open(CONFIG_FILE, 'r') as f:
+            self._config = json.load(f)
+
         options = OPTIONS
-        options['model'] = MODEL_LLM
-        self._llm = llm.LlmLineStreaming(OPENAI_URL, API_KEY, options, insecure=True)
+        options['model'] = self._config['model_llm']
+        self._llm = llm.LlmLineStreaming(self._config['openai_url'], self._config['openai_key'], options, insecure=True)
 
         self._tools_basic = tools.ToolSetBasic()
         self._tools_sleep = tools.ToolSetSleep()
-        self._tools_matrix = tool_matrix.ToolSetMatrix()
+        self._tools_matrix = tool_matrix.ToolSetMatrix(self._config)
         self._tool_list = [
             self._tools_basic,
             self._tools_sleep,
@@ -106,12 +107,6 @@ class ZoeBot():
                 if sleep is not None and sleep <= 0:
                     break
                 time.sleep(1)
-
-tc = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_LLM }, insecure=True)
-print(tc.count_tokens('hepparallaa hejoo sweden!'))
-
-em = llm.Llm(OPENAI_URL, API_KEY, { 'model': MODEL_EMBEDDING }, embedding_query=EMBEDDING_QUERY, insecure=True)
-print(em.embedding('hepparallaa hejoo sweden!'))
 
 zoebot = ZoeBot()
 zoebot.run()

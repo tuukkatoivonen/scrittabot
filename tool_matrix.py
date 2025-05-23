@@ -1,29 +1,23 @@
 import asyncio
-import json
 from typing import Optional
 
 import nio
 
 import tools
 
-CREDENTIALS = 'credentials.json'
-DEFAULT_ROOM = '#zonet:zeonzone.zonet'
 TIMEOUT = 30000         # milliseconds
 
 class ToolSetMatrix(tools.ToolSetBasic):
-    def __init__(self):
+    def __init__(self, config):
         super().__init__()
 
-        self._credentials = {}
+        self._config = config
         self._client = None         # nio client
         self._insecure = True       # Do not verify SSL
-        self._default_room = DEFAULT_ROOM
+        self._default_room = self._config['room_id']
         self._timeout = TIMEOUT
         self._events = []
         self._event_loop = asyncio.get_event_loop()
-
-        with open(CREDENTIALS, 'r') as f:
-            self._credentials = json.load(f)
 
         # Configuration options for the nio.AsyncClient
         client_config = nio.AsyncClientConfig(
@@ -32,11 +26,11 @@ class ToolSetMatrix(tools.ToolSetBasic):
             store_sync_tokens = True,
             encryption_enabled = True,
         )
-        # Initialize the matrix client based on credentials from file
+        # Initialize the matrix client based on configuration
         self._client = nio.AsyncClient(
-            self._credentials['homeserver'],
-            self._credentials['user_id'],
-            device_id = self._credentials['device_id'],
+            self._config['homeserver'],
+            self._config['user_id'],
+            device_id = self._config['device_id'],
             store_path = 'store',
             config = client_config,
             ssl = not self._insecure,
@@ -45,9 +39,9 @@ class ToolSetMatrix(tools.ToolSetBasic):
         self._client.add_event_callback(self._event_callback, nio.RoomMessageText)
 
         self._client.restore_login(
-            user_id = self._credentials['user_id'],
-            device_id = self._credentials['device_id'],
-            access_token = self._credentials['access_token'],
+            user_id = self._config['user_id'],
+            device_id = self._config['device_id'],
+            access_token = self._config['access_token'],
         )
 
     def tools(self):
@@ -85,7 +79,7 @@ class ToolSetMatrix(tools.ToolSetBasic):
         for e in events:
             if e[1].source['type'] != 'm.room.message':
                 continue
-            if e[1].sender == self._credentials['user_id']:
+            if e[1].sender == self._config['user_id']:
                 continue        # Skip events from self
             r.append({
                 'type': e[1].source['type'],
@@ -155,7 +149,7 @@ class ToolSetMatrix(tools.ToolSetBasic):
         alias : can be an alias in the form of '#someRoomAlias:example.com'
             can also be a room_id in the form of '!someRoomId:example.com'
 
-        room_id : room from credentials file
+        room_id : room from configuration
     
         If an alias try to get the corresponding room_id.
         If anything fails it returns the original input.
@@ -174,10 +168,6 @@ class ToolSetMatrix(tools.ToolSetBasic):
                 )
             else:
                 ret = resp.room_id
-                print(
-                    f'Mapped room alias "{alias}" to room id "{ret}". '
-                    f'({resp.room_alias}, {resp.room_id}).'
-                )
         return ret
 
     def _is_room_alias(self, room_id: str) -> bool:
@@ -212,15 +202,15 @@ class ToolSetMatrix(tools.ToolSetBasic):
         return ret
 
     def _default_homeserver(self):
-        """Get the default homeserver (domain) from the credentials file.
+        """Get the default homeserver (domain) from the configuration.
         Use the user_id, not the room_id. The room_id could be on a
         different server owned by someone else. user_id makes more sense.
         """
-        user = self._credentials['user_id']  # who am i
+        user = self._config['user_id']  # who am i
         homeserver = user.split(':',1)[1]
         return homeserver  # matrix.example.com
 
     def _privacy_filter(self, dirty: str) -> str:
         """Remove private info from string"""
-        return dirty.replace(self._credentials['access_token'], '***')
+        return dirty.replace(self._config['access_token'], '***')
 
