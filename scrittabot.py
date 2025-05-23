@@ -21,7 +21,7 @@ import python_execution
 import tools
 import tool_matrix
 
-class ZoeBot():
+class ScrittaBot():
     def __init__(self):
         with open(CONFIG_FILE, 'r') as f:
             self._config = json.load(f)
@@ -113,7 +113,7 @@ class ZoeBot():
                     break
                 time.sleep(1)
 
-zoebot = ZoeBot()
-zoebot.run()
+scrittabot = ScrittaBot()
+scrittabot.run()
 
 # EOF

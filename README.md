@@ -1,6 +1,6 @@
-# ZoeBot
+# ScrittaBot
 
-ZoeBot is a test platform for using large language models
+ScrittaBot is a test platform for using large language models
 (LLMs) as agents executing multi-step actions. It supports
 any LLM behind OpenAI-compatible API and provides a basic
 set of tools. Currently there are tools for chatting with
@@ -8,7 +8,7 @@ user via Matrix protocol (using the nio library).
 
 ## How is this different from other bots?
 
-ZoeBot is inspired by *Letta* and even more by *Huggingface*'s
+ScrittaBot is inspired by *Letta* and even more by *Huggingface*'s
 *smolagents*. It does **not** use OpenAI API for tool definitions,
 but instead instructs the LLM to generate Python code which
 is then executed using the `smolagents.local_python_executor`
@@ -37,7 +37,7 @@ has been created, copy it to `config.json` and add following fields:
 {
   "homeserver": "https://zeonzone.zonet",
   "device_id": "RXXXXXXXXO",
-  "user_id": "@zoebot:zeonzone.zonet",
+  "user_id": "@scrittabot:zeonzone.zonet",
   "room_id": "#zonet:zeonzone.zonet",
   "access_token": "syt_eXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXA",
   "openai_url": "https://zeonzone.zonet:4001",
