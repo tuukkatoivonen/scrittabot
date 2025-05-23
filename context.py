@@ -107,6 +107,7 @@ class SectionDialogue(Section):
         self.add_chunk('output', '3')
 
     def add_chunk(self, tag, content, extra=''):
+        print(f'ADD_CHUNK(tag="{tag}", content="{content}", extra="{extra}")')
         if not tag:
             self._chunks.append([ 'assistant', content + '\n' ])
             return

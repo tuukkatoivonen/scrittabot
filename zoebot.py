@@ -64,6 +64,7 @@ class ZoeBot():
     def _run_llm(self):
         msgs = self._messages()
         #pprint.pp(msgs)
+        print(f'RUN LLM dialogue:{len(msgs)}')
         comp = self._llm.completion(msgs)
         in_python = False
         completion = ''
