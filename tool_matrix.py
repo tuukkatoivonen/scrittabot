@@ -222,3 +222,18 @@ class ToolSetMatrix(tools.ToolSetBasic):
         """Remove private info from string"""
         return dirty.replace(self._config['access_token'], '***')
 
+
+# Tests
+if __name__ == '__main__':
+    import json
+    import time
+    CONFIG_FILE = 'config.json'
+    with open(CONFIG_FILE, 'r') as f:
+        config = json.load(f)
+    tools_matrix = tool_matrix.ToolSetMatrix(config)
+    print('Listening to Matrix events...')
+    while True:
+        matrix_events = tools_matrix.get_events()
+        if matrix_events:
+            print(matrix_events)
+        time.sleep(1)
