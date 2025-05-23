@@ -92,3 +92,26 @@ class LlmLineStreaming(Llm):
             line += token_lines[-1]
         if line is not None:
             yield line
+
+
+# Tests
+if __name__ == '__main__':
+    import json
+    config = json.load(open('config.json', 'r'))
+    options = {
+        'max_tokens': 4096,
+        'temperature': 0.0,
+        'top_p': 1.0,
+        'n': 1,
+        'cache_prompt': True,
+        'model': config['model_llm'],
+    }
+    prompt = [
+        { 'role': 'system', 'content': 'You are a helpful assistant.' },
+        { 'role': 'user', 'content': 'List five animals which can fly.' },
+    ]
+    llm = Llm(config['openai_url'], config['openai_key'], options, insecure=True)
+    print('Calling LLM...')
+    comp = llm.completion(prompt)
+    for token in comp:
+        print(f'<{token}>')
