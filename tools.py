@@ -126,7 +126,7 @@ class ToolSetSleep(ToolSetBasic):
         self._set_sleep = -1
         return s
 
-    def _sleep(min_time: Optional[int] = None):
+    def _sleep(self, min_time: Optional[int] = None):
         self._set_sleep = min_time
         print(f'sleep {min_time}')
 
