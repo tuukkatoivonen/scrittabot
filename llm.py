@@ -50,7 +50,16 @@ class Llm:
             # Lines that are not "data: ..." or empty lines are typically ignored in SSE
             # or could be comments (starting with ':')
 
-    def count_tokens(self, string):
+    def count_tokens(self, messages):
+        if isinstance(messages, list):
+            section_tokens = len(messages) * 3
+            string = ''
+            for m in messages:
+                string += m['content']
+        else:
+            # Assume messages is a plain string
+            section_tokens = 0
+            string = messages
         payload = self.options
         payload['prompt'] = string
         response = self.session.post(
@@ -59,7 +68,7 @@ class Llm:
             verify = not self.insecure
         )
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        return response.json()['total_tokens']
+        return response.json()['total_tokens'] + section_tokens
 
     def embedding(self, string):
         payload = self.options
@@ -111,6 +120,9 @@ if __name__ == '__main__':
         { 'role': 'user', 'content': 'List five animals which can fly.' },
     ]
     llm = Llm(config['openai_url'], config['openai_key'], options, insecure=True)
+    print('Counting tokens...')
+    tokens = llm.count_tokens(prompt)
+    print(f'Tokens: {tokens}')
     print('Calling LLM...')
     comp = llm.completion(prompt)
     for token in comp:
