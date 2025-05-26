@@ -119,11 +119,19 @@ if __name__ == '__main__':
         { 'role': 'system', 'content': 'You are a helpful assistant.' },
         { 'role': 'user', 'content': 'List five animals which can fly.' },
     ]
+
+    print('-- Counting tokens --')
     llm = Llm(config['openai_url'], config['openai_key'], options, insecure=True)
-    print('Counting tokens...')
     tokens = llm.count_tokens(prompt)
     print(f'Tokens: {tokens}')
-    print('Calling LLM...')
+
+    print('-- Llm --')
+    comp = llm.completion(prompt)
+    for token in comp:
+        print(f'<{token}>')
+
+    print('-- LlmLineStreaming --')
+    llm = LlmLineStreaming(config['openai_url'], config['openai_key'], options, insecure=True)
     comp = llm.completion(prompt)
     for token in comp:
         print(f'<{token}>')
