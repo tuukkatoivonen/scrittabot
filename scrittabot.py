@@ -31,11 +31,11 @@ class ScrittaBot():
         self._llm = llm.LlmLineStreaming(self._config['openai_url'], self._config['openai_key'], options, insecure=True)
 
         self._tools_basic = tools.ToolSetBasic()
-        self._tools_sleep = tools.ToolSetSleep()
+        self._tools_system = tools.ToolSetSystem()
         self._tools_matrix = tool_matrix.ToolSetMatrix(self._config)
         self._tool_list = [
             self._tools_basic,
-            self._tools_sleep,
+            self._tools_system,
             self._tools_matrix,
         ]
         self._python_execution = python_execution.PythonExecution(self._tool_list)
@@ -89,7 +89,9 @@ class ScrittaBot():
     def run(self):
         while True:
             output = self._run_llm()
-            sleep = self._tools_sleep.get_sleep()
+            if self._tools_system.shutdown:
+                break
+            sleep = self._tools_system.get_sleep()
             wake = None
             if sleep is not None and sleep >= 0:
                 wake = int(time.time()) + 60*sleep + 1

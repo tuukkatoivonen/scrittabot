@@ -103,10 +103,11 @@ class ToolSetBasic():
         self._print('Document not found')
 
 
-class ToolSetSleep(ToolSetBasic):
+class ToolSetSystem(ToolSetBasic):
     def __init__(self):
         super().__init__()
         self._set_sleep = -1    # -1: do not sleep but return immediately to processing
+        self.shutdown = False
 
     def tools(self):
         return [
@@ -119,6 +120,12 @@ class ToolSetSleep(ToolSetBasic):
     Example: sleep()
     """
 ''', self._sleep),
+('''shutdown(reason: Optional[str]):
+    """
+    Shuts down AI permanently from running.
+    Example: shutdown('Life is too boring')
+    """
+''', self._shutdown),
         ]
 
     def get_sleep(self):
@@ -130,3 +137,6 @@ class ToolSetSleep(ToolSetBasic):
         self._set_sleep = min_time
         print(f'sleep {min_time}')
 
+    def _shutdown(self, reason: Optional[str] = ''):
+        self.shutdown = True
+        print(f'shutdown: {reason}')
