@@ -1,8 +1,7 @@
 import asyncio
 import markdown
-from typing import Optional
-
 import nio
+from typing import Optional
 
 import tools
 
@@ -37,7 +36,28 @@ class ToolSetMatrix(tools.ToolSetBasic):
             ssl = not self._insecure,
             proxy = None,
         )
-        self._client.add_event_callback(self._event_callback, nio.RoomMessageText)
+        self._client.add_event_callback(self._event_callback,
+            (nio.events.room_events.ReactionEvent,
+             nio.events.room_events.RoomAliasEvent,
+             nio.events.room_events.RoomAvatarEvent,
+             nio.events.room_events.RoomCreateEvent,
+             nio.events.room_events.RoomMemberEvent,
+             nio.events.room_events.RoomMessage,
+             nio.events.room_events.RoomMessageAudio,
+             nio.events.room_events.RoomMessageEmote,
+             nio.events.room_events.RoomMessageFile,
+             nio.events.room_events.RoomMessageFormatted,
+             nio.events.room_events.RoomMessageImage,
+             nio.events.room_events.RoomMessageMedia,
+             nio.events.room_events.RoomMessageNotice,
+             nio.events.room_events.RoomMessageText,
+             nio.events.room_events.RoomMessageVideo,
+             nio.events.room_events.RoomNameEvent,
+             nio.events.room_events.RoomTopicEvent,
+             nio.events.room_events.StickerEvent,
+             nio.events.invite_events.InviteAliasEvent,
+             nio.events.invite_events.InviteMemberEvent,
+             nio.events.invite_events.InviteNameEvent))
 
         self._client.restore_login(
             user_id = self._config['user_id'],
@@ -84,18 +104,18 @@ class ToolSetMatrix(tools.ToolSetBasic):
         self._events = []
 
         r = []
-        for e in events:
-            if e[1].source['type'] != 'm.room.message':
+        for room, event in events:
+            if event.source['type'] != 'm.room.message':
                 continue
-            if e[1].sender == self._config['user_id']:
+            if event.sender == self._config['user_id']:
                 continue        # Skip events from self
             r.append({
-                'type': e[1].source['type'],
-                'sender': e[1].source['sender'],
-                'room': e[0].display_name,
-                'msgtype': e[1].source['content']['msgtype'],
-                'body': e[1].source['content']['body'],
-                'origin_server_ts': e[1].source['origin_server_ts'],
+                'type': event.source['type'],
+                'sender': event.source['sender'],
+                'room': room.display_name,
+                'msgtype': event.source['content']['msgtype'],
+                'body': event.source['content']['body'],
+                'origin_server_ts': event.source['origin_server_ts'],
             })
         return r
 
@@ -157,8 +177,6 @@ class ToolSetMatrix(tools.ToolSetBasic):
         alias : can be an alias in the form of '#someRoomAlias:example.com'
             can also be a room_id in the form of '!someRoomId:example.com'
 
-        room_id : room from configuration
-    
         If an alias try to get the corresponding room_id.
         If anything fails it returns the original input.
 
