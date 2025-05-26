@@ -1,0 +1,6 @@
+markdown
+matrix-commander
+nio
+requests
+smolagents
+urllib3
