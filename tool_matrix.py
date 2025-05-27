@@ -107,6 +107,7 @@ class ToolSetMatrix(tools.ToolSetBasic):
             },
             ignore_unverified_devices = True,
         ))
+        self._print('Message sent')
 
     def get_events(self):
         self._sync()
