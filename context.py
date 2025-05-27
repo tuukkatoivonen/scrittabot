@@ -15,14 +15,19 @@ class Section:
         self._max_tokens = 10000000
 
     def content(self):
-        return [[ 'system', '' ]]
+        # Returns a list of tuples of (media_type, role, open_tag, close_tag, content)
+        # Where
+        # - media_type: 'text' / 'image' / 'file'
+        # - role: 'assistant': generated (or pretended to be generated) by LLM
+        #         'user': anything else
+        raise Exception('no content in base class')
 
     def set_max_tokens(self, tokens):
         self._max_tokens = tokens
 
 class SectionInstructions(Section):
     def content(self):
-        return [[ 'system', system_prompt.SYSTEM_PROMPT + '\n' ]]
+        return [( 'text', 'system', '', '', system_prompt.SYSTEM_PROMPT + '\n' )]
 
 class SectionTools(Section):
     def __init__(self, tool_list):
@@ -35,7 +40,7 @@ class SectionTools(Section):
             for t in tool.tools():
                 prompt += 'def ' + t[0] + '\n'
         prompt += '```\n\n'
-        return [[ 'system', prompt ]]
+        return [( 'text', 'system', '', '', prompt )]
 
 class SectionMood(Section):
     def __init__(self):
@@ -76,7 +81,7 @@ class SectionMood(Section):
         s = '# Your mood is now:\n\n'
         for mood, amount in self._mood.items():
             s += f'- {mood}: {self._text(amount)}\n'
-        return [[ 'system', s + '\n' ]]
+        return [( 'text', 'system', '', '', s + '\n' )]
 
 class SectionGoals(Section):
     def __init__(self):
@@ -96,40 +101,83 @@ class SectionGoals(Section):
         s = '# Goals\n\nYou have decided to advance the following goals:\n\n'
         for i, g in enumerate(self._goals):
             s += f'{i+1}. {g}\n'
-        return [[ 'system', s + '\n' ]]
+        return [( 'text', 'system', '', '', s + '\n' )]
 
 class SectionDialogue(Section):
     def __init__(self):
         super().__init__()
         self._chunks = []
-        self.add_chunk('system', 'Bootup sequence complete. Persona activated.')
-        self.add_chunk(None, "Let's first test if Python code execution works.\n```python\nx = 1 + 2\nprint(x)\n```")
-        self.add_chunk('output', '3')
+        self.add_chunk(service='system', content='Bootup sequence complete. Persona activated.')
+        self.add_chunk(content="Let's first test if Python code execution works.\n```python\nx = 1 + 2\nprint(x)\n```")
+        self.add_chunk(service='python', content='3')
 
-    def add_chunk(self, tag, content, extra=''):
-        print(f'ADD_CHUNK(tag="{tag}", content="{content}", extra="{extra}")')
-        if not tag:
-            self._chunks.append([ 'assistant', content + '\n' ])
-            return
+    def add_chunk(self, media_type='text', service=None, extra='', content=None):
+        # - service: None: LLM generated, role is 'assistant'; role for everything else is 'user'
+        #            'system': system generated messages
+        #            'python': Output from the Python executor.
+        #            'note': A note fetched from the RAG database.
+        #            'message': User sent a message.
+        print(f'ADD_CHUNK(media_type="{media_type}", service="{service}", extra="{extra}", content="{content if content is None or len(content)<256 else '...'}")')
+        if media_type == 'text' and content == '':
+            raise Exception('Empty text content')
         if extra:
             extra = ' ' + extra.strip()
         extra += f' time="{get_time()}"'
-        self._chunks.append([ 'user', f'<{tag}{extra}>\n{content}\n</{tag}>\n' ])
+        if media_type == 'file':            # For now, no special support for files
+            media_type = 'text'
+        open_tag, close_tag = ('', '')
+        if service:
+            role = 'user'
+            open_tag = f'<{service}{extra}>'
+            close_tag = f'</{service}>\n'
+        else:
+            role = 'assistant'
+        self._chunks.append(( media_type, role, open_tag, close_tag, content ))
 
     def content(self):
+        # Returns a list of tuples of (media_type, service, open_tag, close_tag, content)
         return self._chunks
 
-class ContextManager(Section):
+class ContextManager():
     def __init__(self, sections):
         super().__init__()
         self._sections = sections
 
-    def content(self):
-        cont = []
+    def messages(self):
+        messages = [{ 'role': 'system', 'content': '' }]
+        last_role = messages[0]['role']
         for section in self._sections:
             for chunk in section.content():
-                if len(cont) > 0 and chunk[0] == cont[-1][0]:
-                    cont[-1][1] += chunk[1]
+                # Determine role
+                role = chunk[1]
+                if last_role!='system' and role=='system':
+                    raise Exception('All system messages must be first')
+
+                # Determine new content by media_type
+                was_str = isinstance(messages[-1]['content'], str)
+                if chunk[0] == 'text':
+                    content = chunk[2] + chunk[4] + chunk[3]        # A plain string
+                    is_str = True
+                elif chunk[0] == 'image':
+                    content = [{ 'type': 'image_url', 'image_url': {'url':chunk[4]} }]
+                    is_str = False
                 else:
-                    cont.append(chunk)
-        return cont
+                    raise Exception('Only text and images supported for now')
+
+                if last_role==role:
+                    # Merge into previous message
+                    if is_str != was_str:
+                        # Convert content to list
+                        if was_str:
+                            messages[-1]['content'] = [{ 'type': 'text', 'text': messages[-1]['content'] }]
+                        if is_str:
+                            content = [{ 'type': 'text', 'text': content }]
+                    messages[-1]['content'] += content
+                else:
+                    # A new message
+                    messages.append({ 'role': role, 'content': content })
+                last_role = role
+        # Last message must always be from user, otherwise LLM returns empty string. FIXME: better handling
+        if messages[-1]['role'] != 'user':
+            messages.append({ 'role': 'user', 'content': f'<system time="{get_time()}"></system>\n' })
+        return messages

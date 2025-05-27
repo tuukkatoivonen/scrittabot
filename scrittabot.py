@@ -2,6 +2,7 @@
 
 CONFIG_FILE = 'config.json'
 EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query Query: '
+IMAGE_MAX_SIZE = 256
 
 OPTIONS = {
     'max_tokens': 4096,
@@ -11,15 +12,59 @@ OPTIONS = {
     'cache_prompt': True,
 }
 
+import base64
+import io
 import json
 import time
 import pprint
+from PIL import Image
 
 import context
 import llm
 import python_execution
 import tools
 import tool_matrix
+
+class FileHandler():
+    def __init__(self, filename, path):
+        self._filename = filename
+        self._path = path
+        self._image = None
+        self._max_size = IMAGE_MAX_SIZE
+        try:
+            self._image = Image.open(path)
+        except IOError:
+            # Not an image, but regular file
+            pass
+
+    def _is_image(self):
+        return self._image is not None
+
+    def media_type(self):
+        if self._is_image():
+            return 'image'
+        return 'file'
+
+    def content(self):
+        if not self._is_image():
+            return f'User sent file: {self._filename}'
+
+        # Scale image to reasonable size and return encoded for LLM
+        img = self._image
+        if self._image.width > self._max_size or self._image.height > self._max_size:
+            scale_width  = self._max_size / self._image.width
+            scale_height = self._max_size / self._image.height
+            scale = min(scale_width, scale_height)
+            new_width = max(int(self._image.width * scale_width), 8)
+            new_height = max(int(self._image.height * scale_height), 8)
+            img = self._image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+        # Save image to a byte buffer in PNG format
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        image_bytes = buf.getvalue()
+        # Base64 encode the image bytes
+        base64_image = base64.b64encode(image_bytes).decode('utf-8')
+        return 'data:image/png;base64,' + base64_image
 
 class ScrittaBot():
     def __init__(self):
@@ -54,15 +99,8 @@ class ScrittaBot():
             self._section_dialogue,
         ])
 
-    def _messages(self):
-        msgs = []
-        context = self._context_manager.content()
-        for c in context:
-            msgs.append({ 'role': c[0], 'content': c[1] })
-        return msgs
-
     def _run_llm(self):
-        msgs = self._messages()
+        msgs = self._context_manager.messages()
         #pprint.pp(msgs)
         print(f'RUN LLM dialogue:{len(msgs)}')
         comp = self._llm.completion(msgs)
@@ -83,7 +121,7 @@ class ScrittaBot():
             if line_strip == '```python':
                 in_python = True
                 python = ''
-        self._section_dialogue.add_chunk(None, completion)
+        self._section_dialogue.add_chunk(content=completion)
         return output
 
     def run(self):
@@ -101,13 +139,20 @@ class ScrittaBot():
                 # Check events, break if any
                 events += len(output)
                 for o in output:
-                    self._section_dialogue.add_chunk('output', o)
+                    self._section_dialogue.add_chunk(service='python', content=o)
                 output = []
 
                 matrix_events = self._tools_matrix.get_events()
                 events += len(matrix_events)
                 for m in matrix_events:
-                    self._section_dialogue.add_chunk('message', m['body'], extra=f'user="{m["sender"]}"')
+                    extra = f'user="{m["sender"]}"'
+                    if not m['filename']:
+                        # It is a regular message
+                        self._section_dialogue.add_chunk(service='message', extra=extra, content=m['body'])
+                    else:
+                        extra += f' filename="{m["filename"]}"'
+                        fh = FileHandler(m['filename'], self._tools_matrix.get_path(m['filename']))
+                        self._section_dialogue.add_chunk(media_type=fh.media_type(), service='message', extra=extra, content=fh.content())
 
                 if events > 0:
                     break
