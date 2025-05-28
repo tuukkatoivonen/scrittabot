@@ -19,6 +19,11 @@ class Llm:
             self._session.headers.update({ "Authorization": f"Bearer {self._api_key}" })
         self._reset_stats()
 
+        self._tokens_turn = 5           # Tokens consumed by each turn (Gemma3-12)
+        self._tokens_image = 259        # Tokens consumed by each image (Gemma3-12)
+        self._tokens_m = 1.1139
+        self._tokens_b = -26.207
+
     def _reset_stats(self):
         self._stats = {
             'model': None,
@@ -69,24 +74,30 @@ class Llm:
 
     # Doesn't work directly with llama-server (but with LiteLLM)
     def count_tokens(self, messages):
-        if isinstance(messages, list):
-            section_tokens = len(messages) * 3
-            string = ''
-            for m in messages:
-                string += m['content']
-        else:
-            # Assume messages is a plain string
-            section_tokens = 0
-            string = messages
+        if isinstance(messages, str):
+            messages = [{ 'content': messages }]
+        tokens = 0
         payload = self._options.copy()
-        payload['prompt'] = string
-        response = self._session.post(
-            self._base_url + '/utils/token_counter',
-            json = payload,
-            verify = not self._insecure
-        )
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
-        return response.json()['total_tokens'] + section_tokens
+        for m in messages:
+            content = m['content']
+            if isinstance(content, str):
+                content = [{ 'type': 'text', 'text': content }]
+            for c in content:
+                if c['type'] == 'text':
+                    payload['prompt'] = c['text']
+                    response = self._session.post(
+                        self._base_url + '/utils/token_counter',
+                        json = payload,
+                        verify = not self._insecure
+                    )
+                    response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+                    tokens += response.json()['total_tokens']
+                else:
+                    # Image
+                    tokens += self._tokens_image
+            tokens += self._tokens_turn    
+        tokens = max(int(tokens * self._tokens_m + self._tokens_b), 1)
+        return tokens
 
     def embedding(self, string):
         payload = self._options.copy()

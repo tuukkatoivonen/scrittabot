@@ -102,7 +102,8 @@ class ScrittaBot():
     def _run_llm(self):
         msgs = self._context_manager.messages()
         #pprint.pp(msgs)
-        print(f'RUN LLM dialogue:{len(msgs)}')
+        tokens = self._llm.count_tokens(msgs)
+        print(f'RUN LLM dialogue:{len(msgs)} tokens:{tokens}')
         comp = self._llm.completion(msgs)
         in_python = False
         completion = ''
@@ -121,6 +122,8 @@ class ScrittaBot():
             if line_strip == '```python':
                 in_python = True
                 python = ''
+        stats = self._llm.completion_stats()
+        print(f'RUN LLM stats: {stats}')
         self._section_dialogue.add_chunk(content=completion)
         return output
 
