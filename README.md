@@ -22,16 +22,32 @@ Some design has been made to make it easy for implementing and
 providing more Python functions for the LLM to use. This is done
 now by editing directly the source code.
 
-## Running
+## Prerequisites
+
+You need to have access to OpenAI-compatible LLM endpoint,
+whether having bought access to *OpenAI*, *Gemini*, or whatever,
+or having set up local LLM with eg. *llama.cpp*. You also
+need to have a *Matrix* account and having created a room for
+your bot on the server. I recommend installing both server
+(eg. *matrix-synapse*) and a client (eg. *Cinny*) locally and
+then you can play freely with them.
+
+## Installing
 
 At this early version, users should be experienced Python/AI
 developers. Instructions here are sparse and you **need**
 Python skills to do anything meaningful with the code.
 
-You need to set up Matrix account for the bot and then creating
-`credentials.json` file using `matrix-commander`. Use `matrix-commander`
-to test that you can send and receive messages. After `credentials.json`
-has been created, copy it to `config.json` and add following fields:
+First, install the required Python packages with
+```
+make install
+```
+
+Then you need to set up Matrix account for the bot and creating
+`credentials.json` file using `matrix-commander --login PASSWORD`.
+Use `matrix-commander` to test that you can send and receive messages.
+After `credentials.json` has been created, copy it to `config.json`
+and add following fields:
 
 ```
 {
@@ -43,7 +59,9 @@ has been created, copy it to `config.json` and add following fields:
   "openai_url": "https://zeonzone.zonet:4001",
   "openai_key": "sk-pZXXXXXXXXXXXXXXXXXXXw",
   "model_llm": "your_preferred_model",
+  "context_llm": 8000,
   "model_embedding": "multilingual-e5-large-instruct"
+  "context_embedding": 512
 }
 
 ```
@@ -53,13 +71,20 @@ Customize as needed. If you want to run LLM locally, I recommend
 supports also images (at least with *Gemma3*). (I am using it
 over *LiteLLM* proxy, but it shouldn't matter.)
 
+## Running
+
+After everything above has been done, run with `make run`.
+Typically the bot starts taking notes, setting goals, and
+trying to reach humans by messaging. Since lots of actual
+functionality in the tools is still missing, the bot gets
+quite frustrated, at least until you start chatting with it.
+Log messages about what is happening (in particular LLM
+output) are displayed on the console.
+
 ## Future plans
 
-* Ability to receive images and discussing about the images
-  (using OpenAI image API).
-
-* Ability to receive documents and storing them into
-  filesystem and/or PostgreSQL RAG database.
+* Indexing received documents into PostgreSQL RAG database and
+  being able to access those.
 
 * Ability for the LLM to browse received files and to make RAG queries.
 
@@ -68,5 +93,5 @@ over *LiteLLM* proxy, but it shouldn't matter.)
 * Some kind of monitoring UI (now it just spits debug information
   to console).
 
-* Context length considerations. Currently the input context will
-  overflow after long enough discussion, this has to be fixed.
+* Improving intelligence, decreasing load. Now the models seems to
+  do a lot of hazy and useless stuff.
