@@ -25,6 +25,10 @@ class Section:
     def set_max_tokens(self, tokens):
         self._max_tokens = tokens
 
+    def reduce(self):
+        # Reduce required context space. Returns True if successful, False otherwise
+        return False
+
 class SectionInstructions(Section):
     def content(self):
         return [( 'text', 'system', '', '', system_prompt.SYSTEM_PROMPT + '\n' )]
@@ -135,8 +139,20 @@ class SectionDialogue(Section):
         self._chunks.append(( media_type, role, open_tag, close_tag, content ))
 
     def content(self):
-        # Returns a list of tuples of (media_type, service, open_tag, close_tag, content)
+        # Returns a list of tuples of (media_type, role, open_tag, close_tag, content)
         return self._chunks
+
+    def reduce(self):
+        # Reduce required context space
+        if len(self._chunks) > 5:
+            print('SectionDialogue: reducing')
+            while True:
+                del self._chunks[0]
+                if self._chunks[0][1] == 'user':        # First chunk must have role 'user'
+                    break
+            return True
+        return False
+
 
 class ContextManager():
     def __init__(self, sections):
@@ -181,3 +197,11 @@ class ContextManager():
         if messages[-1]['role'] != 'user':
             messages.append({ 'role': 'user', 'content': f'<system time="{get_time()}"></system>\n' })
         return messages
+
+    def reduce(self):
+        for s in reversed(self._sections):
+            r = s.reduce()
+            if r:
+                return True
+        return False
+

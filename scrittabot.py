@@ -98,12 +98,12 @@ class ScrittaBot():
             self._section_goals,
             self._section_dialogue,
         ])
+        self._context_size = [ 0 ] * 5
 
     def _run_llm(self):
         msgs = self._context_manager.messages()
         #pprint.pp(msgs)
-        tokens = self._llm.count_tokens(msgs)
-        print(f'RUN LLM dialogue:{len(msgs)} tokens:{tokens}')
+        print(f'RUN LLM dialogue:{len(msgs)}')
         comp = self._llm.completion(msgs)
         in_python = False
         completion = ''
@@ -122,9 +122,22 @@ class ScrittaBot():
             if line_strip == '```python':
                 in_python = True
                 python = ''
-        stats = self._llm.completion_stats()
-        print(f'RUN LLM stats: {stats}')
+
         self._section_dialogue.add_chunk(content=completion)
+
+        # Check if we're running out of context, and if so, reduce used context
+        context_size = self._llm.completion_stats()['usage']['prompt_tokens']
+        print(f'RUN LLM context_size:{context_size}')
+        self._context_size = self._context_size[1:] + [context_size]
+        estimated_increase = 2*max([s[0]-s[1] for s in zip(self._context_size[1:], self._context_size[:-1])])
+        print(f'estimated_increase {estimated_increase}')
+        estimated_context = context_size + estimated_increase
+        while estimated_context > self._config['context_llm'] - 16:
+            if not self._context_manager.reduce():
+                print('WARNING: Possible context overflow, can not reduce enough')
+                break
+            estimated_context = self._llm.count_tokens(self._context_manager.messages()) + estimated_increase
+
         return output
 
     def run(self):
