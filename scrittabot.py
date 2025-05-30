@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 CONFIG_FILE = 'config.json'
-EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query Query: '
+EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: '
 IMAGE_MAX_SIZE = 256
 
 OPTIONS = {
@@ -12,59 +12,16 @@ OPTIONS = {
     'cache_prompt': True,
 }
 
-import base64
-import io
 import json
 import time
 import pprint
-from PIL import Image
 
 import context
+import librarian
 import llm
 import python_execution
 import tools
 import tool_matrix
-
-class FileHandler():
-    def __init__(self, filename, path):
-        self._filename = filename
-        self._path = path
-        self._image = None
-        self._max_size = IMAGE_MAX_SIZE
-        try:
-            self._image = Image.open(path)
-        except IOError:
-            # Not an image, but regular file
-            pass
-
-    def _is_image(self):
-        return self._image is not None
-
-    def media_type(self):
-        if self._is_image():
-            return 'image'
-        return 'file'
-
-    def content(self):
-        if not self._is_image():
-            return f'User sent file: {self._filename}'
-
-        # Scale image to reasonable size and return encoded for LLM
-        img = self._image
-        if self._image.width > self._max_size or self._image.height > self._max_size:
-            scale_width  = self._max_size / self._image.width
-            scale_height = self._max_size / self._image.height
-            scale = min(scale_width, scale_height)
-            new_width = max(int(self._image.width * scale_width), 8)
-            new_height = max(int(self._image.height * scale_height), 8)
-            img = self._image.resize((new_width, new_height), Image.Resampling.LANCZOS)
-        # Save image to a byte buffer in PNG format
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        image_bytes = buf.getvalue()
-        # Base64 encode the image bytes
-        base64_image = base64.b64encode(image_bytes).decode('utf-8')
-        return 'data:image/png;base64,' + base64_image
 
 class ScrittaBot():
     def __init__(self):
@@ -75,9 +32,11 @@ class ScrittaBot():
         options['model'] = self._config['model_llm']
         self._llm = llm.LlmLineStreaming(self._config['openai_url'], self._config['openai_key'], options, insecure=True)
 
+        self._librarian = librarian.Librarian()
+
         self._tools_basic = tools.ToolSetBasic()
         self._tools_system = tools.ToolSetSystem()
-        self._tools_matrix = tool_matrix.ToolSetMatrix(self._config)
+        self._tools_matrix = tool_matrix.ToolSetMatrix(self._config, self._librarian)
         self._tool_list = [
             self._tools_basic,
             self._tools_system,
@@ -162,13 +121,13 @@ class ScrittaBot():
                 events += len(matrix_events)
                 for m in matrix_events:
                     extra = f'user="{m["sender"]}"'
-                    if not m['filename']:
+                    if not m['file']:
                         # It is a regular message
                         self._section_dialogue.add_chunk(service='message', extra=extra, content=m['body'])
                     else:
-                        extra += f' filename="{m["filename"]}"'
-                        fh = FileHandler(m['filename'], self._tools_matrix.get_path(m['filename']))
-                        self._section_dialogue.add_chunk(media_type=fh.media_type(), service='message', extra=extra, content=fh.content())
+                        f = m['file']
+                        extra += f' filename="{f.filename()}"'
+                        self._section_dialogue.add_chunk(media_type=f.type(), service='message', extra=extra, content=f.content())
 
                 if events > 0:
                     break

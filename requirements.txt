@@ -3,4 +3,6 @@ matrix-commander
 nio
 requests
 smolagents
+tokenizers
 urllib3
+

@@ -1,29 +1,23 @@
 import asyncio
 import markdown
 import nio
-import re
-import os
-from typing import Optional
 
 import tools
 
-FILES_PATH = 'files'
 TIMEOUT = 30000         # milliseconds
 
 class ToolSetMatrix(tools.ToolSetBasic):
-    def __init__(self, config):
+    def __init__(self, config, librarian):
         super().__init__()
 
         self._config = config
+        self._librarian = librarian
         self._client = None         # nio client
         self._insecure = True       # Do not verify SSL
         self._default_room = self._config['room_id']
-        self._files_path = FILES_PATH
         self._timeout = TIMEOUT
         self._events = []
         self._event_loop = asyncio.get_event_loop()
-
-        os.makedirs(self._files_path, exist_ok=True)
 
         # Configuration options for the nio.AsyncClient
         client_config = nio.AsyncClientConfig(
@@ -82,10 +76,6 @@ class ToolSetMatrix(tools.ToolSetBasic):
 ''', self._send_message),
         ]
 
-    def get_path(self, filename):
-        filename = re.sub(r'[^A-Za-z0-9_=\.,-]', '_', filename)
-        return self._files_path + '/' + filename
-
     def _send_message(self, message: str):
         # "Logged in as @alice:example.org device id: RANDOMDID"
         # If you made a new room and haven't joined as that user, you can use
@@ -116,22 +106,18 @@ class ToolSetMatrix(tools.ToolSetBasic):
 
         r = []
         for room, event in events:
-            filename = None
             if event.sender == self._config['user_id']:
                 continue        # Skip events from self
             if event.source['type'] != 'm.room.message':
                 continue
             if hasattr(event, 'url'):
-                n = 0
-                while True:
-                    filename = event.body
-                    if n > 0:
-                        filename += f'-{n}'
-                    if not os.path.isfile(self.get_path(filename)):
-                        break
-                    n += 1
-                self._event_loop.run_until_complete(self._download_mxc(event.url, self.get_path(filename)))
-                print(f'Downloaded "{filename}"')
+                # Download file
+                response = self._event_loop.run_until_complete(self._client.download(mxc=event.url))
+                print(f'Matrix: downloaded file, {response}')
+                f = self._librarian.add_file(event.body, response.body)
+                print(f'Downloaded "{f.filename()} type {f.type()}"')
+            else:
+                f = None
             r.append({
                 'type': event.source['type'],
                 'sender': event.source['sender'],
@@ -139,7 +125,7 @@ class ToolSetMatrix(tools.ToolSetBasic):
                 'msgtype': event.source['content']['msgtype'],
                 'body': event.source['content']['body'],
                 'origin_server_ts': event.source['origin_server_ts'],
-                'filename': filename,
+                'file': f,
             })
         return r
 
@@ -148,23 +134,6 @@ class ToolSetMatrix(tools.ToolSetBasic):
 
     def _sync(self):
         self._event_loop.run_until_complete(self._client.sync(timeout=self._timeout, full_state=True))
-
-    async def _download_mxc(self, mxc: str, filename: str):
-        """Download MXC resource.
-    
-        Arguments:
-        ---------
-        mxc : str
-            string representing URL like mxc://matrix.org/someRandomKey
-        filename : str
-            name of file for storing download
-        """
-
-        response = await self._client.download(mxc=mxc)
-        print(f'download_mxc response is {response}.')
-        with open(filename, 'wb') as f:
-            f.write(response.body)
-        return response
 
     async def _map_roominfo_to_roomid(self, info: str) -> str:
         """Attempt to convert room info to room_id.
