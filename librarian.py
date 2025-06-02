@@ -7,18 +7,64 @@ from PIL import Image
 
 from typing import Optional
 
+TEXT_MAX_SIZE = 4096
 IMAGE_MAX_SIZE = 256
 FILES_PATH = 'files'
 
+class InvalidFileType(Exception):
+    pass
 
 class Tokenizer():
     class Tokens():
         def __init__(self, tokenizer, text: str):
             self._tokenizer = tokenizer
             self._tokens = self._tokenizer._tokenizer.encode(text)
+            self._token_ratio = self.count() / len(text)    # Average number of tokens per original byte
 
         def count(self):
+            # Return number of tokens
             return len(self._tokens)
+
+        def text_pos(self, tokenpos: int):
+            # Return byte position in original text given a token
+            if tokenpos < 0 or tokenpos >= self.count():
+                if tokenpos == self.count():
+                    return self._tokens.offsets[-1][1]                 # One token beyond max
+                raise Exception(f'Bad tokenpos {tokenpos} (must be in 0..{self.count()-1})')
+            return self._tokens.offsets[tokenpos][0]
+
+        def token_pos(self, textpos: int):
+            # Return token position given byte position in original text
+            if self.count() < 1 or textpos < 0 or textpos >= self._tokens.offsets[-1][1]:
+                raise Exception('Bad textpos')              # Over limits
+            if textpos >= self._tokens.offsets[-1][0]:
+                return self.count() - 1                     # Last token
+            est_textpos = 0
+            est_tokpos = 0
+            token_ratio = self._token_ratio
+            abserror = self._tokens.offsets[-1][1] + 1      # Maximum possible error, must always decrease
+            while True:
+                # Check if we found the corresponding token, if so, abort search
+                if self.text_pos(est_tokpos) <= textpos < self.text_pos(est_tokpos+1):
+                    break
+
+                # Calculate new estimate for the token position
+                error = textpos - est_textpos
+                if abs(error) >= abserror:
+                    break
+                new_tokpos = max(1, min(int(est_tokpos + token_ratio * error), self.count() - 2))
+                new_textpos = self.text_pos(new_tokpos)
+                if new_tokpos == est_tokpos:
+                    break
+                est_textpos = new_textpos
+                est_tokpos = new_tokpos
+                abserror = abs(error)
+
+            # Final fixup
+            while not (self.text_pos(est_tokpos) <= textpos < self.text_pos(est_tokpos+1)):
+                est_tokpos += -1 if (self.text_pos(est_tokpos) > textpos) else 1
+
+            return est_tokpos
 
     def __init__(self):
         tokenizer_json = 'tokenizer.json'
@@ -47,6 +93,8 @@ class File():
 class FileText(File):
     def __init__(self, librarian, unsecure_filename, filename, pathname):
         super().__init__(librarian, unsecure_filename, filename, pathname)
+        self._max_size = TEXT_MAX_SIZE      # Max chunk size
+        self._splitstrings = [ '\n# ','\n## ', '\n### ', '\n#### ', '\n\n', '.\n', '\n', '. ', '  ', ' ' ]
         self._index()
 
     def type(self):
@@ -55,14 +103,41 @@ class FileText(File):
     def _index(self):
         with open(self._pathname, 'r') as f:
             text = f.read()
-            tokens = self._librarian.tokenizer.tokenize(text)
-            print(f'Tokens: {tokens.count()}')
+        tokens = self._librarian.tokenizer.tokenize(text)
+        chunks = []
+        text_pos = 0
+        token_pos = 0
+        while token_pos < tokens.count():
+            new_token_pos = min(token_pos + self._max_size, tokens.count() - 1)
+            new_text_pos = tokens.text_pos(new_token_pos)
+            if new_token_pos < tokens.count() - 5:
+                for s in self._splitstrings:
+                    sp = text.rfind(s, text_pos + int((new_text_pos-text_pos)/2), new_text_pos)
+                    if sp != -1:
+                        new_token_pos = tokens.token_pos(sp)
+                        break
+            else:
+                # Final chunk
+                new_token_pos = tokens.count()
+            new_text_pos = tokens.text_pos(new_token_pos)
+            chunks.append({ 'content': text[text_pos:new_text_pos],
+                            'begin': text_pos,
+                            'end': new_text_pos,
+                            'depth': 0,
+                            'parents': [],
+                            'tokens': new_token_pos - token_pos })
+            token_pos = new_token_pos
+            text_pos = new_text_pos
+        self._chunks = chunks
 
 class FileImage(File):
     def __init__(self, librarian, unsecure_filename, filename, pathname):
         super().__init__(librarian, unsecure_filename, filename, pathname)
         self._max_size = IMAGE_MAX_SIZE
-        self._image = Image.open(pathname)      # Raises exception of not valid image
+        try:
+            self._image = Image.open(pathname)      # Raises exception of not valid image
+        except:
+            raise InvalidFileType('Not an image file')
 
     def type(self):
         return 'image'
@@ -124,7 +199,7 @@ class Librarian():
             try:
                 f = file_class(self, unsecure_filename, filename, pathname)
                 break
-            except Exception as e:
+            except InvalidFileType as e:
                 print(f'Fail: {e}')
         if f is None:
             raise Exception(f'Can not handle this file: {filename}')
@@ -140,4 +215,6 @@ if __name__ == '__main__':
     lib = Librarian()
     f = lib.add_file('test_text.txt')
     print(f'File type: {f.type()}')
+    import pprint
+    pprint.pp(f._chunks)
 
