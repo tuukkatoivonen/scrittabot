@@ -4,8 +4,9 @@ import os
 import re
 import tokenizers
 from PIL import Image
-
 from typing import Optional
+
+import llm
 
 TEXT_MAX_SIZE = 4096
 IMAGE_MAX_SIZE = 256
@@ -93,9 +94,14 @@ class File():
 class FileText(File):
     def __init__(self, librarian, unsecure_filename, filename, pathname):
         super().__init__(librarian, unsecure_filename, filename, pathname)
+        self._prompt = ('You are a document summarizer. The document may be too large to be processed '
+                        'as one piece, so you will be given the document in smaller parts. Keep the same style as the original '
+                        'document and try to include all facts from the original text. Summarize primarily by removing '
+                        'redundant and generally known facts. Keep the summarized text length in less than half of the original.')
         self._max_size = TEXT_MAX_SIZE      # Max chunk size
         self._splitstrings = [ '\n# ','\n## ', '\n### ', '\n#### ', '\n\n', '.\n', '\n', '. ', '  ', ' ' ]
         self._index()
+        # Contributed by: [@riakashyap](https://github.com/riakashyap)
 
     def type(self):
         return 'text'
@@ -120,7 +126,15 @@ class FileText(File):
                 # Final chunk
                 new_token_pos = tokens.count()
             new_text_pos = tokens.text_pos(new_token_pos)
-            chunks.append({ 'content': text[text_pos:new_text_pos],
+            content = text[text_pos:new_text_pos]
+            messages = [{ 'role': 'system', 'content': self._prompt }]
+            if len(chunks) > 0:
+                messages += [{ 'role': 'user', 'content': chunks[-1]['content'] },
+                             { 'role': 'assistant', 'content': chunks[-1]['summary'] }]
+            messages.append({ 'role': 'user', 'content': content })
+            summary = self._librarian.llm.completion(messages)
+            chunks.append({ 'content': content,
+                            'summary': summary,
                             'begin': text_pos,
                             'end': new_text_pos,
                             'depth': 0,
@@ -162,11 +176,20 @@ class FileImage(File):
 
 
 class Librarian():
-    def __init__(self, path=FILES_PATH):
+    def __init__(self, config, path=FILES_PATH):
         self._path = path
         self._files = []
         os.makedirs(self._path, exist_ok=True)
         self.tokenizer = Tokenizer()
+        options = {
+            'max_tokens': 4096,
+            'temperature': 0.8,
+            'top_p': 1.0,
+            'n': 1,
+            'cache_prompt': True,
+            'model': config['model_llm'],
+        }
+        self.llm = llm.Llm(config['openai_url'], config['openai_key'], options, insecure=True)
 
     def _pathname(self, filename):
         return self._path + '/' + filename
@@ -208,11 +231,15 @@ class Librarian():
 
 # Tests
 if __name__ == '__main__':
+    with open('config.json', 'r') as f:
+        import json
+        config = json.load(f)
+
     tok = Tokenizer()
     t = tok.tokenize('The quick brown fox jumps over the lazy dog')
     print(f'Tokens: {t.count()}')
 
-    lib = Librarian()
+    lib = Librarian(config)
     f = lib.add_file('test_text.txt')
     print(f'File type: {f.type()}')
     import pprint

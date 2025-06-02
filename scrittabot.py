@@ -32,7 +32,7 @@ class ScrittaBot():
         options['model'] = self._config['model_llm']
         self._llm = llm.LlmLineStreaming(self._config['openai_url'], self._config['openai_key'], options, insecure=True)
 
-        self._librarian = librarian.Librarian()
+        self._librarian = librarian.Librarian(config=self._config)
 
         self._tools_basic = tools.ToolSetBasic()
         self._tools_system = tools.ToolSetSystem()
