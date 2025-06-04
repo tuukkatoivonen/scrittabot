@@ -8,9 +8,18 @@ from typing import Optional
 
 import llm
 
-TEXT_MAX_SIZE = 4096
+TEXT_MAX_SIZE = 2048
 IMAGE_MAX_SIZE = 256
 FILES_PATH = 'files'
+
+SUMMARIZATION_PROMPT = (
+'You are an AI document summarizer. Your task is to make an abridged, condensed version of the original '
+'document preserving as much novel facts from the original text a feasible. '
+'Preserve also titles, subtitles, section headers, headlines, and other such labels.\n'
+'The document may be too large to be processed in one piece, so you will be given the document in smaller parts. '
+'Continue each part fluently without inserting extra phrases like "Continued" or "This section ...".'
+'Make sure that each of the condensed parts is less than 600 words.'
+)
 
 class InvalidFileType(Exception):
     pass
@@ -94,14 +103,10 @@ class File():
 class FileText(File):
     def __init__(self, librarian, unsecure_filename, filename, pathname):
         super().__init__(librarian, unsecure_filename, filename, pathname)
-        self._prompt = ('You are a document summarizer. The document may be too large to be processed '
-                        'as one piece, so you will be given the document in smaller parts. Keep the same style as the original '
-                        'document and try to include all facts from the original text. Summarize primarily by removing '
-                        'redundant and generally known facts. Keep the summarized text length in less than half of the original.')
+        self._prompt = SUMMARIZATION_PROMPT
         self._max_size = TEXT_MAX_SIZE      # Max chunk size
         self._splitstrings = [ '\n# ','\n## ', '\n### ', '\n#### ', '\n\n', '.\n', '\n', '. ', '  ', ' ' ]
         self._index()
-        # Contributed by: [@riakashyap](https://github.com/riakashyap)
 
     def type(self):
         return 'text'
@@ -139,7 +144,8 @@ class FileText(File):
                             'end': new_text_pos,
                             'depth': 0,
                             'parents': [],
-                            'tokens': new_token_pos - token_pos })
+                            'tokens': new_token_pos - token_pos,
+            })
             token_pos = new_token_pos
             text_pos = new_text_pos
         self._chunks = chunks
@@ -183,7 +189,7 @@ class Librarian():
         self.tokenizer = Tokenizer()
         options = {
             'max_tokens': 4096,
-            'temperature': 0.8,
+            'temperature': 0.0,
             'top_p': 1.0,
             'n': 1,
             'cache_prompt': True,
