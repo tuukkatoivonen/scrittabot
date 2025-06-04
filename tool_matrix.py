@@ -253,11 +253,11 @@ class ToolSetMatrix(tools.ToolSetBasic):
 
 # Tests
 if __name__ == '__main__':
-    import json
+    import yaml
     import time
-    CONFIG_FILE = 'config.json'
+    CONFIG_FILE = 'config.yaml'
     with open(CONFIG_FILE, 'r') as f:
-        config = json.load(f)
+        config = yaml.safe_load(f)
     tools_matrix = ToolSetMatrix(config)
     print('Listening to Matrix events...')
     while True:

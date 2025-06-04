@@ -237,9 +237,9 @@ class Librarian():
 
 # Tests
 if __name__ == '__main__':
-    with open('config.json', 'r') as f:
-        import json
-        config = json.load(f)
+    with open('config.yaml', 'r') as f:
+        import yaml
+        config = yaml.safe_load(f)
 
     tok = Tokenizer()
     t = tok.tokenize('The quick brown fox jumps over the lazy dog')

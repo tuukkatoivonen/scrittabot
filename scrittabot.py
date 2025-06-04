@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-CONFIG_FILE = 'config.json'
+CONFIG_FILE = 'config.yaml'
 EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: '
 IMAGE_MAX_SIZE = 256
 
@@ -12,9 +12,9 @@ OPTIONS = {
     'cache_prompt': True,
 }
 
-import json
 import time
 import pprint
+import yaml
 
 import context
 import librarian
@@ -26,7 +26,7 @@ import tool_matrix
 class ScrittaBot():
     def __init__(self):
         with open(CONFIG_FILE, 'r') as f:
-            self._config = json.load(f)
+            self._config = yaml.safe_load(f)
 
         options = OPTIONS
         options['model'] = self._config['model_llm']

@@ -164,8 +164,8 @@ class LlmLineStreaming(LlmStreaming):
 
 # Tests
 if __name__ == '__main__':
-    import json
-    config = json.load(open('config.json', 'r'))
+    import yaml
+    config = yaml.safe_load(open('config.yaml', 'r'))
     options = {
         'max_tokens': 4096,
         'temperature': 0.0,
