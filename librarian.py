@@ -8,18 +8,21 @@ from typing import Optional
 
 import llm
 
-TEXT_MAX_SIZE = 2048
+TEXT_MAX_SIZE = 2048        # Tokens
+TEXT_OVERLAP = 256          # Tokens
+TEXT_OUT_WORDS = 400
 IMAGE_MAX_SIZE = 256
 FILES_PATH = 'files'
 
 SUMMARIZATION_PROMPT = (
 'You are an AI document summarizer. Your task is to make an abridged, condensed version of the original '
-'document preserving as much novel facts from the original text a feasible. '
-'Preserve also titles, subtitles, section headers, headlines, and other such labels.\n'
+'document preserving as much novel facts from the original text a feasible along with '
+'titles, subtitles, section headers, headlines, and other such labels.\n'
 'The document may be too large to be processed in one piece, so you will be given the document in smaller parts. '
 'Continue each part fluently without inserting extra phrases like "Continued" or "This section ...".'
-'Make sure that each of the condensed parts is less than 600 words.'
-)
+'The most important thing is to remember that each of the condensed parts must be less than {0} words! '
+'This is the absolute requirement, and if necessary, drop out less important information and facts until '
+'you definitely reach that mandatory goal.'.format(TEXT_OUT_WORDS))
 
 class InvalidFileType(Exception):
     pass
@@ -132,9 +135,13 @@ class FileText(File):
                 new_token_pos = tokens.count()
             new_text_pos = tokens.text_pos(new_token_pos)
             content = text[text_pos:new_text_pos]
+
+            overlap_begin = tokens.text_pos(max(new_token_pos - TEXT_OVERLAP, 0))
+            overlap = text[overlap_begin:new_text_pos]
+
             messages = [{ 'role': 'system', 'content': self._prompt }]
-            if len(chunks) > 0:
-                messages += [{ 'role': 'user', 'content': chunks[-1]['content'] },
+            if len(chunks) > 0 and len(overlap) > 0:
+                messages += [{ 'role': 'user', 'content': overlap },
                              { 'role': 'assistant', 'content': chunks[-1]['summary'] }]
             messages.append({ 'role': 'user', 'content': content })
             summary = self._librarian.llm.completion(messages)
