@@ -140,6 +140,8 @@ class FileText(File):
             overlap = text[overlap_begin:new_text_pos]
 
             messages = [{ 'role': 'system', 'content': self._prompt }]
+            if len(chunks) > 0 and len(overlap) == 0:
+                print(f'XXX ERROR ZS {len(chunks)} {len(overlap)} {token_pos} {text_pos} {new_token_pos} {new_text_pos} {overlap_begin}')
             if len(chunks) > 0 and len(overlap) > 0:
                 messages += [{ 'role': 'user', 'content': overlap },
                              { 'role': 'assistant', 'content': chunks[-1]['summary'] }]
@@ -153,6 +155,7 @@ class FileText(File):
                             'parents': [],
                             'tokens': new_token_pos - token_pos,
             })
+            print(f'XXX TOK {self._librarian.tokenizer.tokenize(content).count()} {self._librarian.tokenizer.tokenize(summary).count()} {self._librarian.tokenizer.tokenize(overlap).count()}')
             token_pos = new_token_pos
             text_pos = new_text_pos
         self._chunks = chunks
