@@ -39,6 +39,13 @@ class Llm:
             if k in chunk:
                 self._stats[k] = chunk[k]
 
+    def _raise_exception(self, msg, payload, output):
+        with open('llm_exception_payload.json', 'w') as f:
+            json.dump(payload, f, indent=4)
+        with open('llm_exception_output.json', 'w') as f:
+            json.dump(output, f, indent=4)
+        raise Exception(msg)
+
     def completion(self, messages):
         self._reset_stats()
         payload = self._options.copy()
@@ -56,8 +63,10 @@ class Llm:
         if ('choices' in response and
             'message' in response['choices'][0] and
             'content' in response['choices'][0]['message']):
-            return response['choices'][0]['message']['content']
-        raise Exception('API returned bad format')
+            content = response['choices'][0]['message']['content']
+            if isinstance(content, str):
+                return content
+        self._raise_exception('API returned bad format', payload, response)
 
     def completion_stats(self):
         return self._stats
@@ -135,7 +144,10 @@ class LlmStreaming(Llm):
                 if ('choices' in chunk and
                     'delta' in chunk['choices'][0] and
                     'content' in chunk['choices'][0]['delta']):
-                    yield chunk['choices'][0]['delta']['content']
+                    content = chunk['choices'][0]['delta']['content']
+                    if not isinstance(content, str):
+                        self._raise_exception('bad content (streaming)', payload, chunk)
+                    yield content
                 self._parse_stats(chunk)
             # Lines that are not "data: ..." or empty lines are typically ignored in SSE
             # or could be comments (starting with ':')
