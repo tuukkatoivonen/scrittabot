@@ -56,7 +56,10 @@ class Llm:
             json = payload,
             verify = not self._insecure
         )
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        try:
+            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        except requests.exceptions.HTTPError as e:
+            self._raise_exception(f'HTTPError:{e}', payload, response)
         response = response.json()
         self._parse_stats(response)
 
@@ -129,7 +132,11 @@ class LlmStreaming(Llm):
             stream = True,
             verify = not self._insecure
         )
-        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        try:
+            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        except requests.exceptions.HTTPError as e:
+            self._raise_exception(f'HTTPError:{e}', payload, response)
+
         iterator = response.iter_lines()
 
         for line_bytes in iterator:
