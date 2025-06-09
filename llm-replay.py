@@ -25,6 +25,11 @@ if 'openai_key' in config:
     headers['Authorization'] = f'Bearer {config["openai_key"]}'
 
 urllib3.disable_warnings()  # Suppress all warnings from urllib3 (which requests uses)
+print('----- Sending request ------')
 response = requests.post(url, json=payload, headers=headers, timeout=timeout, verify=False)
-pprint.pp(response.json())
+print('----- Got request ------')
+try:
+    pprint.pp(response.json())
+except:
+    pprint.pp(response.text)
 response.raise_for_status()  # Raises HTTPError for bad responses (4XX or 5XX)
