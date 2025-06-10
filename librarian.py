@@ -188,7 +188,7 @@ class FileText(File):
         end_chunk = 1
         while True:
             new_chunks = list(self._reduce(chunks[start_chunk:end_chunk]))
-            self._librarian.add_file(self._filename, data=''.join(c['content'] for c in new_chunks), ext=f'depth{new_chunks[0]['depth']}')
+            self._librarian.add_file(self._filename, data=''.join(c['content'] for c in new_chunks), ext=f'd{new_chunks[0]['depth']}')
             start_chunk = end_chunk
             end_chunk = start_chunk + len(new_chunks)
             chunks += new_chunks
@@ -232,16 +232,16 @@ class FileImage(File):
                 'role': 'user',
                 'content': [
                     { 'type': 'image_url', 'image_url': self._imagedata },
-                    { 'type': 'text', 'text': 'Describe this image briefly, using one or two condensed sentences.' },
+                    { 'type': 'text', 'text': ('Describe this image accurately, without leaving any detail out. '
+                                               'Use as long description as needed.') },
                 ]
             }
         ]
-        self._description_short = self._librarian.llm.completion(messages)
-        messages[1]['content'][1]['text'] = ('Describe this image accurately, without leaving any detail out. ' +
-                                             'Use as long description as needed.')
-        self._description_long = self._librarian.llm.completion(messages)
-        self._short = self._librarian.add_file(self._filename, ext='short', data=self._description_short)
-        self._long  = self._librarian.add_file(self._filename, ext='long', data=self._description_long)
+        self._desc1 = self._librarian.llm.completion(messages)
+        messages[1]['content'][1]['text'] = 'Describe this image briefly, using one or two condensed sentences.'
+        self._desc2 = self._librarian.llm.completion(messages)
+        self._d1 = self._librarian.add_file(self._filename, ext='d1', data=self._desc1)
+        self._d2 = self._librarian.add_file(self._filename, ext='d2', data=self._desc2)
 
     def content(self):
         # Scale image to reasonable size and return encoded for LLM
@@ -324,10 +324,10 @@ if __name__ == '__main__':
 
     f1 = lib.add_file('testikuva.jpg')
     print(f'File type: {f1.type()}')
-    print('=== description_short ===')
-    print(f1._description_short)
-    print('=== description_long ===')
-    print(f1._description_long)
+    print('=== desc1 ===')
+    print(f1._desc1)
+    print('=== desc2 ===')
+    print(f1._desc2)
 
     f2 = lib.add_file('test_text.txt')
     print(f'File type: {f2.type()}')
