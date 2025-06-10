@@ -311,6 +311,7 @@ if __name__ == '__main__':
     print(f'Tokens: {t.count()}')
 
     lib = Librarian(config)
+
     f1 = lib.add_file('testikuva.jpg')
     print(f'File type: {f1.type()}')
     print('=== description_short ===')
@@ -321,4 +322,3 @@ if __name__ == '__main__':
     f2 = lib.add_file('test_text.txt')
     print(f'File type: {f2.type()}')
     pprint.pp(f2._chunks)
-
