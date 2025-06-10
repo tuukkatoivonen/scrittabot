@@ -112,6 +112,19 @@ class Llm:
         response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
         return response.json()['data'][0]['embedding']
 
+    def rerank(self, query, chunks):
+        payload = self._options.copy()
+        payload['query'] = query
+        payload['documents'] = chunks
+        response = self._session.post(
+            self._base_url + '/v1/rerank',
+            json = payload,
+            verify = not self._insecure
+        )
+        response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+        return [i['relevance_score'] for i in response.json()['results']]
+
+
 class LlmStreaming(Llm):
     def __init__(self, url, api_key=None, options={}, embedding_query='', insecure=False):
         loc = locals()
