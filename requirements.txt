@@ -1,8 +1,9 @@
 markdown
 matrix-commander
 nio
+pgvector
+psycopg2
 requests
 smolagents
 tokenizers
 urllib3
-
