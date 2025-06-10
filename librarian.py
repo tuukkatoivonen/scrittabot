@@ -188,6 +188,7 @@ class FileText(File):
         end_chunk = 1
         while True:
             new_chunks = list(self._reduce(chunks[start_chunk:end_chunk]))
+            self._librarian.add_file(self._filename, data=''.join(c['content'] for c in new_chunks), ext=f'depth{new_chunks[0]['depth']}')
             start_chunk = end_chunk
             end_chunk = start_chunk + len(new_chunks)
             chunks += new_chunks
@@ -239,6 +240,8 @@ class FileImage(File):
         messages[1]['content'][1]['text'] = ('Describe this image accurately, without leaving any detail out. ' +
                                              'Use as long description as needed.')
         self._description_long = self._librarian.llm.completion(messages)
+        self._short = self._librarian.add_file(self._filename, ext='short', data=self._description_short)
+        self._long  = self._librarian.add_file(self._filename, ext='long', data=self._description_long)
 
     def content(self):
         # Scale image to reasonable size and return encoded for LLM
@@ -261,34 +264,41 @@ class Librarian():
         }
         self.llm = llm.Llm(config['openai_url'], config['openai_key'], options, insecure=True)
 
-    def _pathname(self, filename):
-        return self._path + '/' + filename
+    def _pathname(self, filename, ext=None):
+        pre = '' if ext is None else '@'
+        ext = '' if ext is None else ('.' + ext)
+        return self._path + '/' + pre + filename + ext
 
-    def add_file(self, unsecure_filename: str, data: Optional[bytes] = None):
+    def add_file(self, unsecure_filename: str, data: Optional = None, ext = None):
         # If data is None, file already exists, just import it.
         # If data is not None, create the file from the data.
+        # If ext is not None, this is internal index file with extension ext, private to library
+        # Internal index files are always the base type File.
         # Return the filename that can be used to refer to the file.
         filename = re.sub(r'[^A-Za-z0-9_=\.,-]', '_', unsecure_filename)[:100]
 
         if data:
             # File has to be created
+            if not isinstance(data, bytes):
+                data = data.encode('utf-8')
             n = 0
             fn = filename
             while True:
                 filename = fn + (f'-{n}' if n > 0 else '')
-                pathname = self._pathname(filename)
+                pathname = self._pathname(filename, ext)
                 if not os.path.isfile(pathname):
                     break
                 n += 1
             with open(pathname, 'wb') as f:
                 f.write(data)
 
-        pathname = self._pathname(filename)
+        pathname = self._pathname(filename, ext)
         if not os.path.isfile(pathname):
-            raise Exception('File does not exist')
+            raise FileNotFoundError
 
         f = None
-        for file_class in [ FileImage, FileText, File ]:
+        classes = ([] if ext is not None else [ FileImage, FileText ]) + [ File ]
+        for file_class in classes:
             try:
                 f = file_class(self, unsecure_filename, filename, pathname)
                 break
