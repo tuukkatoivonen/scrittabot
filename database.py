@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
+import hashlib
 import psycopg2
 import psycopg2.extras      # dictionary cursors
 import urllib.parse
 from pgvector.psycopg2 import register_vector
+
+import llm
 
 EMBEDDING_DIMENSIONS = 1024
 
@@ -84,6 +87,8 @@ class Database():
         if not self._check():
             print('Creating new database')
             self.reset()
+        options = { 'model': config['model_embedding'] }
+        self._llm = llm.Llm(config['openai_url'], config['openai_key'], options, insecure=True)
 
     def __del__(self):
         self._db.close()
@@ -124,6 +129,49 @@ class Database():
             self._db.rollback()
             print(f'Error resetting database ({e}), rolled back')
             raise e
+
+    def add_chunk(self, chunk):
+        # chunk: must contain fields below AND 'content'
+        # Adds 'embedding', 'sha256', and 'key', also returns key
+        insert_sql = """
+            INSERT INTO chunks (
+                filename,
+                chunk_begin,
+                chunk_end,
+                depth,
+                original_filename,
+                original_begin,
+                original_end,
+                sha256,
+                embedding,
+                keywords
+            ) VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s, %s, %s
+            ) RETURNING key;
+        """
+        chunk['embedding'] = self._llm.embedding(chunk['content'])
+        chunk['sha256'] = hashlib.sha256(chunk['content'].encode('utf-8')).hexdigest()
+        with self._db.cursor() as cur:
+            data = (
+                chunk.get('filename'),
+                chunk.get('chunk_begin'),
+                chunk.get('chunk_end'),
+                chunk.get('depth'),
+                chunk.get('original_filename'),
+                chunk.get('original_begin'),
+                chunk.get('original_end'),
+                chunk.get('sha256'),
+                chunk.get('embedding'),
+                chunk.get('keywords'),
+            )
+            cur.execute(insert_sql, data)
+            key = cur.fetchone()[0]
+            self._db.commit()
+        chunk['key'] = key
+        return key
+
 
 if __name__ == '__main__':
     import yaml
