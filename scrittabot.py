@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 CONFIG_FILE = 'config.yaml'
-EMBEDDING_QUERY = 'Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery: '
+EMBEDDING_QUERY = ''
 IMAGE_MAX_SIZE = 256
 
 OPTIONS = {
