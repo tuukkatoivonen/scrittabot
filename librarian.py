@@ -6,6 +6,7 @@ import tokenizers
 from PIL import Image
 from typing import Optional
 
+import database
 import llm
 
 TEXT_MAX_SIZE = 2048        # Tokens
@@ -188,13 +189,18 @@ class FileText(File):
                 # TODO: could use here directly keywords from shallower levels.
                 keywords = []
 
-            last_chunk = { 'content': summary,
-                           'begin': text_pos,
-                           'end': new_text_pos,
-                           'depth': depth,
-                           'parents': [ 0 ],
-                           'tokens': new_token_pos - token_pos,
-                           'keywords': keywords }
+            last_chunk = { 
+                'content':              summary,
+                # Fill 'filename' later
+                'chunk_begin':          text_pos,
+                'chunk_end':            new_text_pos,
+                'depth':                depth,
+                'original_filename':    self._unsecure_filename,
+                'original_begin':       0,  # XXX: FIXME. The to calculate offsets relative to original file
+                'original_end':         0,
+                'keywords':             keywords,
+                'tokens':               new_token_pos - token_pos,
+            }
             print(f'XXX TOK {depth} {self._librarian.tokenizer.tokenize(content).count()} {self._librarian.tokenizer.tokenize(summary).count()} {self._librarian.tokenizer.tokenize(overlap).count()}')
             token_pos = new_token_pos
             text_pos = new_text_pos
@@ -204,19 +210,26 @@ class FileText(File):
         with open(self._pathname, 'r', errors='ignore') as f:
             text = f.read()
         tokens = self._librarian.tokenizer.tokenize(text)
-        chunks = [{ 'content': text,
-                    'begin': 0,
-                    'end': len(text),
-                    'depth': 0,
-                    'parents': [],
-                    'tokens': tokens.count(),
-                    'keywords': [],
+        chunks = [{
+            'content':              text,
+            'filename':             self._filename,
+            'chunk_begin':          0,
+            'chunk_end':            len(text),
+            'depth':                0,
+            'original_filename':    self._unsecure_filename,
+            'original_begin':       0,
+            'original_end':         len(text),
+            'keywords':             [],
+            'tokens':               tokens.count(),
         }]
         start_chunk = 0
         end_chunk = 1
         while True:
             new_chunks = list(self._reduce(chunks[start_chunk:end_chunk]))
-            self._librarian.add_file(self._filename, data=''.join(c['content'] for c in new_chunks), ext=f'd{new_chunks[0]['depth']}')
+            f = self._librarian.add_file(self._filename, data=''.join(c['content'] for c in new_chunks), ext=f'd{new_chunks[0]['depth']}')
+            for c in new_chunks:
+                c['filename'] = f._filename
+                self._librarian.db.add_chunk(c)
             start_chunk = end_chunk
             end_chunk = start_chunk + len(new_chunks)
             chunks += new_chunks
@@ -254,24 +267,7 @@ class FileImage(File):
         # Base64 encode the image bytes
         self._imagedata = 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode('utf-8')
 
-        # Create description
-        messages = [
-            { 'role': 'system', 'content': self._prompt_summary },
-            {
-                'role': 'user',
-                'content': [
-                    { 'type': 'image_url', 'image_url': self._imagedata },
-                    { 'type': 'text', 'text': ('Describe this image accurately, without leaving any detail out. '
-                                               'Use as long description as needed.') },
-                ]
-            }
-        ]
-        self._desc1 = self._librarian.llm.completion(messages)
-        messages[1]['content'][1]['text'] = 'Describe this image briefly, using one or two condensed sentences.'
-        self._desc2 = self._librarian.llm.completion(messages)
-        self._d1 = self._librarian.add_file(self._filename, ext='d1', data=self._desc1)
-        self._d2 = self._librarian.add_file(self._filename, ext='d2', data=self._desc2)
-
+        # Create keywords
         messages = [
             { 'role': 'system', 'content': self._prompt_keywords },
             {
@@ -283,7 +279,41 @@ class FileImage(File):
             }
         ]
         keywords = self._librarian.llm.completion(messages)
-        self._kw = [ k.strip() for k in keywords.split(',') ]
+        keywords = [ k.strip() for k in keywords.split(',') ]
+
+        # Create descriptions
+        query = [
+            ( 'Describe this image accurately, without leaving any detail out. '
+             'Use as long description as needed.' ),
+            ( 'Describe this image briefly, using one or two condensed sentences.' ),
+        ]
+        self._chunks = []
+        for d, q in enumerate(query):
+            messages = [
+                { 'role': 'system', 'content': self._prompt_summary },
+                {
+                    'role': 'user',
+                    'content': [
+                        { 'type': 'image_url', 'image_url': self._imagedata },
+                        { 'type': 'text', 'text': q },
+                    ]
+                }
+            ]
+            desc = self._librarian.llm.completion(messages)
+            f = self._librarian.add_file(self._filename, ext=f'd{d+1}', data=desc)
+            chunk = {
+                'content':              desc,
+                'filename':             f._filename,
+                'chunk_begin':          0,
+                'chunk_end':            len(desc),
+                'depth':                d + 1,
+                'original_filename':    self._unsecure_filename,
+                'original_begin':       0,
+                'original_end':         0,
+                'keywords':             keywords,
+            }
+            self._librarian.db.add_chunk(chunk)
+            self._chunks.append(chunk)
 
     def content(self):
         # Scale image to reasonable size and return encoded for LLM
@@ -305,6 +335,7 @@ class Librarian():
             'model': config['model_llm'],
         }
         self.llm = llm.Llm(config['openai_url'], config['openai_key'], options, insecure=True)
+        self.db = database.Database(config)
 
     def _pathname(self, filename, ext=None):
         pre = '' if ext is None else '@'
@@ -351,6 +382,7 @@ class Librarian():
         self._files.append(f)
         return f
 
+
 # Tests
 if __name__ == '__main__':
     import pprint
@@ -366,10 +398,10 @@ if __name__ == '__main__':
 
     f1 = lib.add_file('testikuva.jpg')
     print(f'File type: {f1.type()}')
-    print('=== desc1 ===')
-    print(f1._desc1)
-    print('=== desc2 ===')
-    print(f1._desc2)
+    print('=== desc long ===')
+    print(f1._chunks[0]['content'])
+    print('=== desc short ===')
+    print(f1._chunks[1]['content'])
 
     f2 = lib.add_file('test_text.txt')
     print(f'File type: {f2.type()}')
